@@ -4,6 +4,8 @@ import helmet from 'helmet';
 import cors from 'cors';
 import rateLimit from 'express-rate-limit';
 import mongoose from 'mongoose';
+import cookieParser from 'cookie-parser';
+import authRouter from './auth/authRoutes.js';
 
 const app = express();
 
@@ -36,6 +38,12 @@ app.use(globalLimiter);
 
 // Parse JSON request bodies
 app.use(express.json());
+
+// Parse cookies
+app.use(cookieParser());
+
+// Auth Routes
+app.use('/api/auth', authRouter);
 
 // Basic health check endpoint
 app.get('/health', (req, res) => {

@@ -5,6 +5,7 @@ export const MONGO_URI = process.env.MONGO_URI || '';
 export const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || '';
 export const MAX_FILE_SIZE_MB = parseInt(process.env.MAX_FILE_SIZE_MB, 10) || 10;
 export const JWT_SECRET = process.env.JWT_SECRET || '';
+export const REFRESH_TOKEN_SECRET = process.env.REFRESH_TOKEN_SECRET || '';
 
 export const CLOUDINARY_CLOUD_NAME = process.env.CLOUDINARY_CLOUD_NAME || '';
 export const CLOUDINARY_API_KEY = process.env.CLOUDINARY_API_KEY || '';
