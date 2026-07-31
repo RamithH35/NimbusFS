@@ -6,6 +6,7 @@ import rateLimit from 'express-rate-limit';
 import mongoose from 'mongoose';
 import cookieParser from 'cookie-parser';
 import authRouter from './auth/authRoutes.js';
+import fileRouter from './routes/fileRoutes.js';
 
 const app = express();
 
@@ -44,6 +45,9 @@ app.use(cookieParser());
 
 // Auth Routes
 app.use('/api/auth', authRouter);
+
+// File Routes
+app.use('/api/files', fileRouter);
 
 // Basic health check endpoint
 app.get('/health', (req, res) => {
