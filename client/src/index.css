@@ -30,6 +30,17 @@
   --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
 }
 
+[data-theme="dark"] {
+  --color-canvas: #191919;
+  --color-canvas-soft: #141414;
+  --color-surface: #1f1f1f;
+  --color-ink: #ffffff;
+  --color-ink-secondary: #d4d4d4;
+  --color-ink-muted: #a0a0a0;
+  --color-ink-faint: #666666;
+  --color-hairline: #2e2e2e;
+}
+
 body {
   margin: 0;
   padding: 0;
