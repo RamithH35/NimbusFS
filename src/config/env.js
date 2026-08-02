@@ -15,6 +15,8 @@ export const SUPABASE_URL = process.env.SUPABASE_URL || '';
 export const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 export const SUPABASE_BUCKET = process.env.SUPABASE_BUCKET || 'nimbusfs-files';
 
+export const REDIS_URL = process.env.REDIS_URL || '';
+
 // Run strict validation on startup
 const requiredEnv = {
   MONGO_URI,
@@ -26,6 +28,7 @@ const requiredEnv = {
   SUPABASE_URL,
   SUPABASE_SERVICE_ROLE_KEY,
   SUPABASE_BUCKET,
+  REDIS_URL,
 };
 
 for (const [key, value] of Object.entries(requiredEnv)) {

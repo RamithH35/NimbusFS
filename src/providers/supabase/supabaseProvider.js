@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js';
 import { Readable } from 'stream';
 import path from 'path';
 import StorageProvider from '../StorageProvider.js';
+import { retryWithBackoff } from '../../utils/retry.js';
 import {
   SUPABASE_URL,
   SUPABASE_SERVICE_ROLE_KEY,
@@ -16,7 +17,7 @@ export class SupabaseProvider extends StorageProvider {
   }
 
   /**
-   * Upload file to Supabase Storage
+   * Upload file to Supabase Storage with retry backoff
    * @param {Buffer} buffer 
    * @param {string} originalName 
    * @param {string} mimeType 
@@ -27,59 +28,65 @@ export class SupabaseProvider extends StorageProvider {
     const storedName = `${Date.now()}-${Math.random().toString(36).substring(2, 15)}${ext}`;
     const filePath = `uploads/${storedName}`;
 
-    // Upload using service role key (RLS bypass)
-    const { error } = await this.supabase.storage
-      .from(this.bucketName)
-      .upload(filePath, buffer, {
-        contentType: mimeType,
-        duplex: 'half',
-      });
+    return retryWithBackoff(async () => {
+      // Upload using service role key (RLS bypass)
+      const { error } = await this.supabase.storage
+        .from(this.bucketName)
+        .upload(filePath, buffer, {
+          contentType: mimeType,
+          duplex: 'half',
+        });
 
-    if (error) {
-      throw error;
-    }
+      if (error) {
+        throw error;
+      }
 
-    const { data: urlData } = this.supabase.storage
-      .from(this.bucketName)
-      .getPublicUrl(filePath);
+      const { data: urlData } = this.supabase.storage
+        .from(this.bucketName)
+        .getPublicUrl(filePath);
 
-    return {
-      storedName,
-      url: urlData.publicUrl,
-      size: buffer.length,
-    };
+      return {
+        storedName,
+        url: urlData.publicUrl,
+        size: buffer.length,
+      };
+    }, 3, 200);
   }
 
   /**
-   * Download file from Supabase Storage as a stream
+   * Download file from Supabase Storage as a stream with retry backoff
    * @param {string} storedName 
    */
   async download(storedName) {
-    const { data, error } = await this.supabase.storage
-      .from(this.bucketName)
-      .download(`uploads/${storedName}`);
+    return retryWithBackoff(async () => {
+      const { data, error } = await this.supabase.storage
+        .from(this.bucketName)
+        .download(`uploads/${storedName}`);
 
-    if (error) {
-      throw error;
-    }
+      if (error) {
+        throw error;
+      }
 
-    // Convert Supabase download Blob to Node.js Readable stream
-    const arrayBuffer = await data.arrayBuffer();
-    return Readable.from(Buffer.from(arrayBuffer));
+      // Convert Supabase download Blob to Node.js Readable stream
+      const arrayBuffer = await data.arrayBuffer();
+      return Readable.from(Buffer.from(arrayBuffer));
+    }, 3, 200);
   }
 
   /**
-   * Delete file from Supabase Storage
+   * Delete file from Supabase Storage with retry backoff
    * @param {string} storedName 
    */
   async delete(storedName) {
-    const { error } = await this.supabase.storage
-      .from(this.bucketName)
-      .remove([`uploads/${storedName}`]);
+    return retryWithBackoff(async () => {
+      const { error } = await this.supabase.storage
+        .from(this.bucketName)
+        .remove([`uploads/${storedName}`]);
 
-    if (error) {
-      throw error;
-    }
+      if (error) {
+        throw error;
+      }
+    }, 3, 200);
   }
 
   /**

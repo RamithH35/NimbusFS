@@ -68,11 +68,12 @@ export const uploadFile = async (req, res) => {
     // 3. Compute SHA-256 hash of the file buffer
     const hash = crypto.createHash('sha256').update(file.buffer).digest('hex');
 
-    // 4. Upload via storage manager
-    const uploadResult = await storageManager.upload(file);
+    // 4. Upload via storage manager (passing ownerId for logging)
+    const uploadResult = await storageManager.upload(file, req.user._id);
 
     // 5. Save metadata to database
     const newFile = new FileModel({
+      _id: uploadResult._id,
       ownerId: req.user._id,
       originalName: file.originalname,
       storedName: uploadResult.storedName,
@@ -82,6 +83,13 @@ export const uploadFile = async (req, res) => {
       hash,
     });
     await newFile.save();
+
+    if (uploadResult.queued) {
+      return res.status(202).json({
+        message: 'Upload queued for retry',
+        fileId: newFile._id,
+      });
+    }
 
     return res.status(201).json(newFile);
   } catch (error) {

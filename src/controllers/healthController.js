@@ -8,7 +8,7 @@ import { storageManager } from '../storage/storageManager.js';
 export const getStorageHealth = async (req, res) => {
   try {
     const health = await storageManager.healthCheck();
-    return res.status(200).json({ providers: health });
+    return res.status(200).json(health);
   } catch (error) {
     console.error('Storage health check controller error:', error);
     return res.status(500).json({ error: 'Internal server error checking storage health' });

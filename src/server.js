@@ -8,6 +8,9 @@ import cookieParser from 'cookie-parser';
 import authRouter from './auth/authRoutes.js';
 import fileRouter from './routes/fileRoutes.js';
 import healthRouter from './routes/healthRoutes.js';
+import adminRouter from './routes/adminRoutes.js';
+import { startUploadWorker } from './jobs/uploadWorker.js';
+import './jobs/redisConnection.js';
 
 const app = express();
 
@@ -53,6 +56,9 @@ app.use('/api/files', fileRouter);
 // Health Routes
 app.use('/api/health', healthRouter);
 
+// Admin Routes
+app.use('/api/admin', adminRouter);
+
 // Basic health check endpoint
 app.get('/health', (req, res) => {
   res.status(200).json({ status: 'OK', message: 'NimbusFS Server is healthy.' });
@@ -71,6 +77,13 @@ console.log('Connecting to MongoDB...');
 mongoose.connect(MONGO_URI)
   .then(() => {
     console.log('Successfully connected to MongoDB.');
+    // Start background worker
+    try {
+      startUploadWorker();
+      console.log('BullMQ worker started successfully.');
+    } catch (workerError) {
+      console.error('Failed to start BullMQ worker:', workerError.message);
+    }
     app.listen(PORT, () => {
       console.log(`Server is listening on port ${PORT}`);
     });

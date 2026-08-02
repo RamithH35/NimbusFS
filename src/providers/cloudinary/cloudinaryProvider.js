@@ -2,6 +2,7 @@ import { v2 as cloudinary } from 'cloudinary';
 import { Readable } from 'stream';
 import path from 'path';
 import StorageProvider from '../StorageProvider.js';
+import { retryWithBackoff } from '../../utils/retry.js';
 import {
   CLOUDINARY_CLOUD_NAME,
   CLOUDINARY_API_KEY,
@@ -37,7 +38,7 @@ export class CloudinaryProvider extends StorageProvider {
   }
 
   /**
-   * Upload file to Cloudinary
+   * Upload file to Cloudinary with retry backoff
    * @param {Buffer} buffer 
    * @param {string} originalName 
    * @param {string} mimeType 
@@ -50,30 +51,32 @@ export class CloudinaryProvider extends StorageProvider {
     const resourceType = this.getResourceType(storedName);
     const publicId = resourceType === 'raw' ? storedName : path.parse(storedName).name;
 
-    return new Promise((resolve, reject) => {
-      const uploadStream = cloudinary.uploader.upload_stream(
-        {
-          folder: 'nimbusfs',
-          public_id: publicId,
-          resource_type: resourceType,
-        },
-        (error, result) => {
-          if (error) {
-            return reject(error);
+    return retryWithBackoff(async () => {
+      return new Promise((resolve, reject) => {
+        const uploadStream = cloudinary.uploader.upload_stream(
+          {
+            folder: 'nimbusfs',
+            public_id: publicId,
+            resource_type: resourceType,
+          },
+          (error, result) => {
+            if (error) {
+              return reject(error);
+            }
+            resolve({
+              storedName,
+              url: result.secure_url,
+              size: result.bytes,
+            });
           }
-          resolve({
-            storedName,
-            url: result.secure_url,
-            size: result.bytes,
-          });
-        }
-      );
+        );
 
-      const readableStream = new Readable();
-      readableStream.push(buffer);
-      readableStream.push(null);
-      readableStream.pipe(uploadStream);
-    });
+        const readableStream = new Readable();
+        readableStream.push(buffer);
+        readableStream.push(null);
+        readableStream.pipe(uploadStream);
+      });
+    }, 3, 200);
   }
 
   /**
@@ -81,13 +84,15 @@ export class CloudinaryProvider extends StorageProvider {
    * @param {string} storedName 
    */
   async download(storedName) {
-    const resourceType = this.getResourceType(storedName);
-    const url = `https://res.cloudinary.com/${this.cloudName}/${resourceType}/upload/nimbusfs/${storedName}`;
-    const response = await fetch(url);
-    if (!response.ok) {
-      throw new Error(`Failed to download file from Cloudinary: ${response.statusText}`);
-    }
-    return Readable.fromWeb(response.body);
+    return retryWithBackoff(async () => {
+      const resourceType = this.getResourceType(storedName);
+      const url = `https://res.cloudinary.com/${this.cloudName}/${resourceType}/upload/nimbusfs/${storedName}`;
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error(`Failed to download file from Cloudinary: ${response.statusText}`);
+      }
+      return Readable.fromWeb(response.body);
+    }, 3, 200);
   }
 
   /**
@@ -95,18 +100,20 @@ export class CloudinaryProvider extends StorageProvider {
    * @param {string} storedName 
    */
   async delete(storedName) {
-    const resourceType = this.getResourceType(storedName);
-    const publicId = resourceType === 'raw'
-      ? `nimbusfs/${storedName}`
-      : `nimbusfs/${path.parse(storedName).name}`;
+    return retryWithBackoff(async () => {
+      const resourceType = this.getResourceType(storedName);
+      const publicId = resourceType === 'raw'
+        ? `nimbusfs/${storedName}`
+        : `nimbusfs/${path.parse(storedName).name}`;
 
-    const result = await cloudinary.uploader.destroy(publicId, {
-      resource_type: resourceType,
-      invalidate: true,
-    });
-    if (result.result !== 'ok' && result.result !== 'not found') {
-      throw new Error(`Cloudinary delete failed: ${result.result}`);
-    }
+      const result = await cloudinary.uploader.destroy(publicId, {
+        resource_type: resourceType,
+        invalidate: true,
+      });
+      if (result.result !== 'ok' && result.result !== 'not found') {
+        throw new Error(`Cloudinary delete failed: ${result.result}`);
+      }
+    }, 3, 200);
   }
 
   /**
