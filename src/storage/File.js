@@ -13,12 +13,10 @@ const fileSchema = new mongoose.Schema({
   },
   storedName: {
     type: String,
-    required: [true, 'Stored name is required'],
     trim: true,
   },
   provider: {
     type: String,
-    required: [true, 'Storage provider is required'],
     default: 'local',
   },
   mimeType: {
@@ -64,7 +62,23 @@ const fileSchema = new mongoose.Schema({
   },
   hash: {
     type: String, // SHA-256 of file buffer
-    required: [true, 'File hash is required'],
+  },
+  isChunked: {
+    type: Boolean,
+    default: false,
+  },
+  totalChunks: {
+    type: Number,
+    default: null,
+  },
+  uploadId: {
+    type: String,
+    default: null,
+  },
+  status: {
+    type: String,
+    enum: ['complete', 'uploading'],
+    default: 'complete',
   },
   createdAt: {
     type: Date,
@@ -74,6 +88,9 @@ const fileSchema = new mongoose.Schema({
 
 // Sparse index for fast lookups by share ID
 fileSchema.index({ shareId: 1 }, { sparse: true });
+
+// Sparse index for fast lookups by upload ID
+fileSchema.index({ uploadId: 1 }, { sparse: true });
 
 // Compound index for fast deduplication lookups
 fileSchema.index({ hash: 1, ownerId: 1 });

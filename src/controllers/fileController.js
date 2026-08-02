@@ -9,6 +9,7 @@ import bcrypt from 'bcrypt';
 import { canAccess } from '../utils/fileAccess.js';
 import { computeHash } from '../utils/hashing.js';
 import { encrypt, decrypt } from '../utils/encryption.js';
+import { initUpload, storeChunk, getChunks, assembleChunks, clearChunks } from '../utils/chunkStore.js';
 
 // Define supported safe MIME types
 const allowedImageTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml', 'image/bmp'];
@@ -325,5 +326,223 @@ export const revokeShare = async (req, res) => {
   } catch (error) {
     console.error('Revoke share controller error:', error);
     return res.status(500).json({ error: 'Internal server error revoking share' });
+  }
+};
+
+// @desc    Initialize chunked upload session
+// @route   POST /api/files/upload/init
+// @access  Private
+export const initChunkedUpload = async (req, res) => {
+  try {
+    const { originalName, mimeType, totalSize, totalChunks } = req.body;
+
+    // Validate size limit
+    const maxSizeBytes = MAX_FILE_SIZE_MB * 1024 * 1024;
+    if (totalSize > maxSizeBytes) {
+      return res.status(413).json({ error: `File size exceeds the limit of ${MAX_FILE_SIZE_MB}MB` });
+    }
+
+    // Validate chunks range
+    const chunks = parseInt(totalChunks, 10);
+    if (isNaN(chunks) || chunks < 1 || chunks > 100) {
+      return res.status(400).json({ error: 'totalChunks must be between 1 and 100' });
+    }
+
+    // Validate MIME type
+    if (!allowedMimeTypes.includes(mimeType)) {
+      return res.status(415).json({ error: 'Unsupported file type' });
+    }
+
+    const uploadId = nanoid(21);
+
+    const file = new FileModel({
+      originalName,
+      mimeType,
+      ownerId: req.user._id,
+      isChunked: true,
+      totalChunks: chunks,
+      uploadId,
+      status: 'uploading',
+      visibility: 'private',
+      size: totalSize,
+    });
+    await file.save();
+
+    initUpload(uploadId);
+
+    return res.status(201).json({
+      uploadId,
+      fileId: file._id,
+    });
+  } catch (error) {
+    console.error('Init chunked upload error:', error);
+    return res.status(500).json({ error: 'Internal server error initializing chunked upload' });
+  }
+};
+
+// @desc    Upload chunk of a file
+// @route   POST /api/files/upload/chunk
+// @access  Private
+export const uploadChunk = async (req, res) => {
+  try {
+    const { uploadId, chunkIndex } = req.body;
+    if (!req.file) {
+      return res.status(400).json({ error: 'No chunk file uploaded' });
+    }
+
+    const entry = getChunks(uploadId);
+    if (!entry) {
+      return res.status(400).json({ error: 'Upload session not found or expired' });
+    }
+
+    // Query DB by uploadId + ownerId
+    const fileRecord = await FileModel.findOne({ uploadId, ownerId: req.user._id });
+    if (!fileRecord) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const chunkIdx = parseInt(chunkIndex, 10);
+    if (isNaN(chunkIdx) || chunkIdx < 0 || chunkIdx >= fileRecord.totalChunks) {
+      return res.status(400).json({ error: 'Invalid chunkIndex' });
+    }
+
+    storeChunk(uploadId, chunkIdx, req.file.buffer);
+
+    return res.status(200).json({
+      received: true,
+      chunkIndex: chunkIdx,
+    });
+  } catch (error) {
+    console.error('Upload chunk error:', error);
+    return res.status(500).json({ error: 'Internal server error uploading chunk' });
+  }
+};
+
+// @desc    Complete chunked upload
+// @route   POST /api/files/upload/complete
+// @access  Private
+export const completeChunkedUpload = async (req, res) => {
+  try {
+    const { uploadId, totalChunks } = req.body;
+
+    const fileRecord = await FileModel.findOne({ uploadId, ownerId: req.user._id, status: 'uploading' });
+    if (!fileRecord) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const chunks = parseInt(totalChunks, 10);
+
+    let assembledBuffer;
+    try {
+      assembledBuffer = assembleChunks(uploadId, chunks);
+    } catch (err) {
+      if (err.missingChunks) {
+        return res.status(400).json({ error: `Missing chunks: [${err.missingChunks.join(', ')}]` });
+      }
+      throw err;
+    }
+
+    // Compute SHA-256 hash on reassembled plaintext buffer
+    const hash = computeHash(assembledBuffer);
+
+    // Check deduplication
+    const duplicate = await FileModel.findOne({ hash, ownerId: req.user._id, status: 'complete' });
+    if (duplicate) {
+      clearChunks(uploadId);
+      await FileModel.deleteOne({ _id: fileRecord._id });
+      const dupObj = duplicate.toObject();
+      dupObj.isDuplicate = true;
+      return res.status(200).json(dupObj);
+    }
+
+    // Encrypt assembled buffer
+    const { encryptedBuffer, iv, authTag } = encrypt(assembledBuffer);
+
+    // Create file object for StorageManager
+    const fileObj = {
+      buffer: encryptedBuffer,
+      originalname: fileRecord.originalName,
+      mimetype: fileRecord.mimeType,
+      size: assembledBuffer.length,
+    };
+
+    // Upload via storage manager
+    const uploadResult = await storageManager.upload(fileObj, req.user._id);
+
+    fileRecord.storedName = uploadResult.storedName;
+    fileRecord.provider = uploadResult.provider || 'local';
+    fileRecord.hash = hash;
+    fileRecord.iv = iv;
+    fileRecord.authTag = authTag;
+    fileRecord.status = 'complete';
+    fileRecord.size = assembledBuffer.length;
+    await fileRecord.save();
+
+    clearChunks(uploadId);
+
+    if (uploadResult.queued) {
+      return res.status(202).json({
+        message: 'Upload queued for retry',
+        fileId: fileRecord._id,
+      });
+    }
+
+    return res.status(200).json(fileRecord);
+  } catch (error) {
+    console.error('Complete chunked upload error:', error);
+    return res.status(500).json({ error: 'Internal server error completing upload' });
+  }
+};
+
+// @desc    Get received chunks status
+// @route   GET /api/files/:id/chunks-status
+// @access  Private
+export const getChunksStatus = async (req, res) => {
+  try {
+    const fileRecord = await FileModel.findById(req.params.id);
+    if (!fileRecord) {
+      return res.status(404).json({ error: 'File not found' });
+    }
+
+    // Verify ownership
+    if (fileRecord.ownerId.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    if (!fileRecord.isChunked) {
+      return res.status(400).json({ error: 'File is not chunked' });
+    }
+
+    const total = fileRecord.totalChunks;
+    let receivedChunks = 0;
+    const missingChunks = [];
+
+    const entry = getChunks(fileRecord.uploadId);
+
+    if (fileRecord.status === 'complete') {
+      receivedChunks = total;
+    } else if (entry) {
+      for (let i = 0; i < total; i++) {
+        if (entry.chunks[i]) {
+          receivedChunks++;
+        } else {
+          missingChunks.push(i);
+        }
+      }
+    } else {
+      for (let i = 0; i < total; i++) {
+        missingChunks.push(i);
+      }
+    }
+
+    return res.status(200).json({
+      uploadId: fileRecord.uploadId,
+      receivedChunks,
+      totalChunks: total,
+      missingChunks,
+    });
+  } catch (error) {
+    console.error('Get chunks status error:', error);
+    return res.status(500).json({ error: 'Internal server error fetching chunk status' });
   }
 };
