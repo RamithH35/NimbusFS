@@ -8,7 +8,9 @@ import RegisterPage from './pages/RegisterPage';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import DashboardPage from './pages/DashboardPage';
 import FilesPage from './pages/FilesPage';
+import SharedPage from './pages/SharedPage';
 import SharePage from './pages/SharePage';
+import AdminPage from './pages/AdminPage';
 import Spinner from './components/ui/Spinner';
 
 // Route wrapper that requires authentication
@@ -98,6 +100,22 @@ export default function App() {
                 element={
                   <ProtectedRoute>
                     <FilesPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/shared"
+                element={
+                  <ProtectedRoute>
+                    <SharedPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/admin"
+                element={
+                  <ProtectedRoute>
+                    <AdminPage />
                   </ProtectedRoute>
                 }
               />

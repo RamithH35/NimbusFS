@@ -8,6 +8,8 @@ import Badge from '../components/ui/Badge';
 import Spinner from '../components/ui/Spinner';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
 import UploadModal from '../components/files/UploadModal';
+import ShareModal from '../components/files/ShareModal';
+import EmptyState from '../components/ui/EmptyState';
 
 export const FilesPage = () => {
   const { showToast } = useToast();
@@ -17,9 +19,10 @@ export const FilesPage = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
-  
+
   // Modals / dialogs state
   const [isUploadOpen, setIsUploadOpen] = useState(false);
+  const [shareTarget, setShareTarget] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
 
@@ -87,8 +90,13 @@ export const FilesPage = () => {
     }
   };
 
-  const handleSharePlaceholder = (file) => {
-    showToast(`Sharing config coming in Phase C for: ${file.originalName}`, 'info');
+  const handleShare = (file) => {
+    setShareTarget(file);
+  };
+
+  const handleShareStateChange = () => {
+    // Refresh file list after share / revoke
+    fetchFiles();
   };
 
   const formatSize = (bytes) => {
@@ -160,11 +168,11 @@ export const FilesPage = () => {
               <Spinner size="md" />
             </div>
           ) : filteredFiles.length === 0 ? (
-            <div className="py-12 flex flex-col items-center justify-center text-center">
-              <span className="text-3xl mb-2">📂</span>
-              <p className="text-sm font-semibold text-ink-secondary">No files match your query</p>
-              <p className="text-xs text-ink-muted mt-1">Try refining your search keyword or upload new items.</p>
-            </div>
+            <EmptyState
+              icon="🔍"
+              title="No files match your query"
+              description="Try refining your search keyword or upload new items."
+            />
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm text-left border-collapse">
@@ -198,7 +206,7 @@ export const FilesPage = () => {
                           Download
                         </Button>
                         <Button
-                          onClick={() => handleSharePlaceholder(file)}
+                          onClick={() => handleShare(file)}
                           variant="utility"
                           size="sm"
                           className="px-2.5 py-1 text-[11px]"
@@ -252,6 +260,14 @@ export const FilesPage = () => {
           isOpen={isUploadOpen}
           onClose={() => setIsUploadOpen(false)}
           onUploadSuccess={fetchFiles}
+        />
+
+        {/* Share Modal */}
+        <ShareModal
+          file={shareTarget}
+          isOpen={!!shareTarget}
+          onClose={() => setShareTarget(null)}
+          onShareStateChange={handleShareStateChange}
         />
 
         {/* Confirm Delete Dialog */}

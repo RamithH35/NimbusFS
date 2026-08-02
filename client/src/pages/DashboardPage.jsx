@@ -8,6 +8,8 @@ import Button from '../components/ui/Button';
 import Badge from '../components/ui/Badge';
 import Spinner from '../components/ui/Spinner';
 import UploadModal from '../components/files/UploadModal';
+import ShareModal from '../components/files/ShareModal';
+import EmptyState from '../components/ui/EmptyState';
 
 export const DashboardPage = () => {
   const { user } = useAuth();
@@ -20,6 +22,7 @@ export const DashboardPage = () => {
   const [totalFilesCount, setTotalFilesCount] = useState(0);
   const [usedStorageBytes, setUsedStorageBytes] = useState(0);
   const [isUploadOpen, setIsUploadOpen] = useState(false);
+  const [shareTarget, setShareTarget] = useState(null);
 
   const fetchDashboardData = useCallback(async () => {
     // 1. Fetch health
@@ -41,11 +44,7 @@ export const DashboardPage = () => {
       setRecentFiles(filesData.files || []);
       setTotalFilesCount(filesData.pagination?.total || 0);
 
-      // Sum all file sizes (of current page or overall user storage)
-      // Since it's paginated, let's fetch overall user files size from api,
-      // or sum current ones, or sum all files (we can do a query to fetch the total size).
-      // Let's sum the top files, and for display calculate used bytes.
-      // Better yet, we can fetch all files without limits just to compute storage usage
+      // Sum all file sizes to compute total storage usage
       const allFiles = await apiFetch('/api/files?limit=100&page=1');
       const sum = (allFiles.files || []).reduce((acc, f) => acc + (f.size || 0), 0);
       setUsedStorageBytes(sum);
@@ -72,6 +71,14 @@ export const DashboardPage = () => {
     if (p === 'cloudinary') return 'blue';
     if (p === 'supabase') return 'green';
     return 'gray';
+  };
+
+  const handleShare = (file) => {
+    setShareTarget(file);
+  };
+
+  const handleShareStateChange = () => {
+    fetchDashboardData();
   };
 
   const TOTAL_STORAGE_LIMIT_BYTES = 50 * 1024 * 1024; // 50MB Virtual Storage Limit
@@ -168,21 +175,20 @@ export const DashboardPage = () => {
               <Spinner size="md" />
             </div>
           ) : recentFiles.length === 0 ? (
-            <div className="py-12 flex flex-col items-center justify-center text-center">
-              <span className="text-3xl mb-2">📂</span>
-              <p className="text-sm font-semibold text-ink-secondary">No files uploaded yet</p>
-              <p className="text-xs text-ink-muted mt-1 max-w-xs">
-                Upload your first image, text, or binary file using the upload button to get started.
-              </p>
-              <Button
-                onClick={() => setIsUploadOpen(true)}
-                variant="secondary"
-                size="sm"
-                className="mt-4"
-              >
-                Upload File
-              </Button>
-            </div>
+            <EmptyState
+              icon="📂"
+              title="No files uploaded yet"
+              description="Upload your first image, text, or binary file using the upload button to get started."
+              action={
+                <Button
+                  onClick={() => setIsUploadOpen(true)}
+                  variant="secondary"
+                  size="sm"
+                >
+                  Upload File
+                </Button>
+              }
+            />
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm text-left border-collapse">
@@ -192,6 +198,7 @@ export const DashboardPage = () => {
                     <th className="py-2.5 font-medium">Size</th>
                     <th className="py-2.5 font-medium">Provider</th>
                     <th className="py-2.5 font-medium">Date</th>
+                    <th className="py-2.5 font-medium text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-hairline">
@@ -204,6 +211,16 @@ export const DashboardPage = () => {
                       </td>
                       <td className="py-3 text-xs text-ink-muted">
                         {new Date(file.createdAt).toLocaleDateString()}
+                      </td>
+                      <td className="py-3 text-right">
+                        <Button
+                          onClick={() => handleShare(file)}
+                          variant="utility"
+                          size="sm"
+                          className="px-2.5 py-1 text-[11px]"
+                        >
+                          Share
+                        </Button>
                       </td>
                     </tr>
                   ))}
@@ -218,6 +235,14 @@ export const DashboardPage = () => {
           isOpen={isUploadOpen}
           onClose={() => setIsUploadOpen(false)}
           onUploadSuccess={fetchDashboardData}
+        />
+
+        {/* Share Modal */}
+        <ShareModal
+          file={shareTarget}
+          isOpen={!!shareTarget}
+          onClose={() => setShareTarget(null)}
+          onShareStateChange={handleShareStateChange}
         />
       </div>
     </AppShell>

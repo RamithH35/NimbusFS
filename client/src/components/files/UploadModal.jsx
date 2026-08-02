@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useToast } from '../../context/ToastContext';
 import { apiFetch } from '../../api/client';
 import Card from '../ui/Card';
@@ -6,8 +6,6 @@ import Button from '../ui/Button';
 import Spinner from '../ui/Spinner';
 
 export const UploadModal = ({ isOpen, onClose, onUploadSuccess }) => {
-  if (!isOpen) return null;
-
   const [activeTab, setActiveTab] = useState('single'); // 'single' | 'chunked'
   const [selectedFile, setSelectedFile] = useState(null);
   const [uploading, setUploading] = useState(false);
@@ -16,6 +14,20 @@ export const UploadModal = ({ isOpen, onClose, onUploadSuccess }) => {
 
   const fileInputRef = useRef(null);
   const { showToast } = useToast();
+
+  // Escape key closes modal
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape' && !uploading) {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, uploading, onClose]);
+
+  if (!isOpen) return null;
 
   const handleDrag = (e) => {
     e.preventDefault();
@@ -158,10 +170,19 @@ export const UploadModal = ({ isOpen, onClose, onUploadSuccess }) => {
     }
   };
 
+  const handleBackdropClick = (e) => {
+    if (e.target === e.currentTarget && !uploading) {
+      onClose();
+    }
+  };
+
   const percentage = chunkProgress.total > 0 ? Math.round((chunkProgress.current / chunkProgress.total) * 100) : 0;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs select-none">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs select-none"
+      onClick={handleBackdropClick}
+    >
       <Card elevated={true} className="w-full max-w-lg bg-surface shadow-level-2 animate-slide-in relative flex flex-col p-6">
         <button
           onClick={() => { if (!uploading) onClose(); }}
@@ -178,8 +199,8 @@ export const UploadModal = ({ isOpen, onClose, onUploadSuccess }) => {
           <button
             onClick={() => { if (!uploading) { setActiveTab('single'); clearFile(); } }}
             className={`flex-1 pb-2.5 text-sm font-semibold transition-all border-b-2 cursor-pointer ${activeTab === 'single'
-                ? 'border-primary text-primary'
-                : 'border-transparent text-ink-muted hover:text-ink'
+              ? 'border-primary text-primary'
+              : 'border-transparent text-ink-muted hover:text-ink'
               }`}
             disabled={uploading}
           >
@@ -188,8 +209,8 @@ export const UploadModal = ({ isOpen, onClose, onUploadSuccess }) => {
           <button
             onClick={() => { if (!uploading) { setActiveTab('chunked'); clearFile(); } }}
             className={`flex-1 pb-2.5 text-sm font-semibold transition-all border-b-2 cursor-pointer ${activeTab === 'chunked'
-                ? 'border-primary text-primary'
-                : 'border-transparent text-ink-muted hover:text-ink'
+              ? 'border-primary text-primary'
+              : 'border-transparent text-ink-muted hover:text-ink'
               }`}
             disabled={uploading}
           >
@@ -206,8 +227,8 @@ export const UploadModal = ({ isOpen, onClose, onUploadSuccess }) => {
             onDrop={handleDrop}
             onClick={() => fileInputRef.current?.click()}
             className={`border-2 border-dashed rounded-lg p-10 flex flex-col items-center justify-center text-center cursor-pointer transition-colors ${dragActive
-                ? 'border-primary bg-primary/5'
-                : 'border-hairline hover:bg-canvas-soft'
+              ? 'border-primary bg-primary/5'
+              : 'border-hairline hover:bg-canvas-soft'
               }`}
           >
             <input
