@@ -9,7 +9,7 @@ export const Card = ({
   const borderClass = elevated ? 'shadow-level-1 border-0' : 'border border-hairline';
   return (
     <div
-      className={`rounded-xl bg-white p-6 ${borderClass} ${className}`}
+      className={`rounded-xl bg-surface p-6 ${borderClass} ${className}`}
       {...props}
     >
       {children}

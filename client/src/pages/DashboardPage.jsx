@@ -12,7 +12,7 @@ import UploadModal from '../components/files/UploadModal';
 export const DashboardPage = () => {
   const { user } = useAuth();
   const { showToast } = useToast();
-  
+
   const [loadingHealth, setLoadingHealth] = useState(true);
   const [loadingFiles, setLoadingFiles] = useState(true);
   const [providers, setProviders] = useState([]);
@@ -98,12 +98,12 @@ export const DashboardPage = () => {
         {/* Dashboard Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Storage Usage Card */}
-          <Card elevated={true} className="flex flex-col justify-between p-6 bg-canvas border border-hairline">
+          <Card elevated={true} className="flex flex-col justify-between p-6 bg-surface border border-hairline">
             <div>
               <h2 className="text-sm font-bold text-ink mb-1">Storage Usage</h2>
               <span className="text-xs text-ink-muted">Used space of virtual allowance</span>
             </div>
-            
+
             <div className="my-6">
               <div className="flex justify-between text-xs font-semibold text-ink-secondary mb-2">
                 <span>{formatSize(usedStorageBytes)} used</span>
@@ -124,7 +124,7 @@ export const DashboardPage = () => {
           </Card>
 
           {/* Provider status list */}
-          <Card elevated={true} className="lg:col-span-2 p-6 bg-canvas border border-hairline">
+          <Card elevated={true} className="lg:col-span-2 p-6 bg-surface border border-hairline">
             <h2 className="text-sm font-bold text-ink mb-1">Storage Providers Status</h2>
             <p className="text-xs text-ink-muted mb-4">Failover status and API latency measurements.</p>
 
@@ -159,7 +159,7 @@ export const DashboardPage = () => {
         </div>
 
         {/* Recent files */}
-        <Card elevated={true} className="p-6 bg-canvas border border-hairline">
+        <Card elevated={true} className="p-6 bg-surface border border-hairline">
           <h2 className="text-sm font-bold text-ink mb-1">Recent Uploads</h2>
           <p className="text-xs text-ink-muted mb-4">Latest 5 files uploaded to your cloud storage.</p>
 
@@ -197,7 +197,7 @@ export const DashboardPage = () => {
                 <tbody className="divide-y divide-hairline">
                   {recentFiles.map((file) => (
                     <tr key={file._id || file.id} className="text-ink-secondary hover:bg-canvas-soft/50">
-                      <td className="py-3 font-medium truncate max-w-[200px]">{file.originalName}</td>
+                      <td className="py-3 font-medium text-ink truncate max-w-[200px]">{file.originalName}</td>
                       <td className="py-3 text-xs">{formatSize(file.size)}</td>
                       <td className="py-3">
                         <Badge color={getProviderColor(file.provider)}>{file.provider}</Badge>

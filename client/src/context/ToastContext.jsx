@@ -8,7 +8,7 @@ export const ToastProvider = ({ children }) => {
   const showToast = useCallback((message, type = 'info') => {
     const id = Math.random().toString(36).substring(2, 9);
     setToasts((prev) => [...prev, { id, message, type }]);
-    
+
     // Auto dismiss after 4 seconds
     setTimeout(() => {
       setToasts((prev) => prev.filter((t) => t.id !== id));
@@ -36,7 +36,7 @@ export const ToastProvider = ({ children }) => {
             <div
               key={toast.id}
               onClick={() => removeToast(toast.id)}
-              className={`flex items-start justify-between bg-white text-ink-secondary text-sm p-4 rounded-xl shadow-level-2 border border-hairline cursor-pointer animate-slide-in ${leftBorder}`}
+              className={`flex items-start justify-between bg-surface text-ink-secondary text-sm p-4 rounded-xl shadow-level-2 border border-hairline cursor-pointer animate-slide-in ${leftBorder}`}
             >
               <div className="pr-4">{toast.message}</div>
               <button className="text-ink-muted hover:text-ink font-bold text-xs select-none">✕</button>

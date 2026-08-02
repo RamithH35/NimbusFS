@@ -129,7 +129,7 @@ export const FilesPage = () => {
         </div>
 
         {/* Filter input */}
-        <Card elevated={true} className="p-4 bg-canvas border border-hairline flex items-center">
+        <Card elevated={true} className="p-4 bg-surface border border-hairline flex items-center">
           <svg
             xmlns="http://www.w3.org/2000/svg"
             fill="none"
@@ -154,7 +154,7 @@ export const FilesPage = () => {
         </Card>
 
         {/* Table list */}
-        <Card elevated={true} className="p-6 bg-canvas border border-hairline">
+        <Card elevated={true} className="p-6 bg-surface border border-hairline">
           {loading ? (
             <div className="flex justify-center py-12">
               <Spinner size="md" />
@@ -180,7 +180,7 @@ export const FilesPage = () => {
                 <tbody className="divide-y divide-hairline">
                   {filteredFiles.map((file) => (
                     <tr key={file._id || file.id} className="text-ink-secondary hover:bg-canvas-soft/50">
-                      <td className="py-3.5 font-medium truncate max-w-[220px]">{file.originalName}</td>
+                      <td className="py-3.5 font-medium text-ink truncate max-w-[220px]">{file.originalName}</td>
                       <td className="py-3.5 text-xs">{formatSize(file.size)}</td>
                       <td className="py-3.5">
                         <Badge color={getProviderColor(file.provider)}>{file.provider}</Badge>

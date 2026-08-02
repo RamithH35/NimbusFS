@@ -136,7 +136,7 @@ export const RegisterPage = () => {
               <div className="text-left -mt-2 mb-4">
                 <div className="flex justify-between items-center text-xs mb-1">
                   <span className="text-ink-muted">Password Strength:</span>
-                  <span className="font-semibold" style={{ color: strength.color === 'bg-accent-green' ? '#1aae39' : strength.color === 'bg-primary' ? '#0075de' : '#dd5b00' }}>
+                  <span className="font-semibold" style={{ color: strength.color === 'bg-accent-green' ? 'var(--color-accent-green)' : strength.color === 'bg-primary' ? 'var(--color-primary)' : 'var(--color-accent-orange)' }}>
                     {strength.label}
                   </span>
                 </div>

@@ -162,7 +162,7 @@ export const UploadModal = ({ isOpen, onClose, onUploadSuccess }) => {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs select-none">
-      <Card elevated={true} className="w-full max-w-lg bg-canvas shadow-level-2 animate-slide-in relative flex flex-col p-6">
+      <Card elevated={true} className="w-full max-w-lg bg-surface shadow-level-2 animate-slide-in relative flex flex-col p-6">
         <button
           onClick={() => { if (!uploading) onClose(); }}
           className="absolute right-4 top-4 text-ink-muted hover:text-ink font-bold text-xs select-none cursor-pointer"
@@ -177,22 +177,20 @@ export const UploadModal = ({ isOpen, onClose, onUploadSuccess }) => {
         <div className="flex border-b border-hairline mb-5">
           <button
             onClick={() => { if (!uploading) { setActiveTab('single'); clearFile(); } }}
-            className={`flex-1 pb-2.5 text-sm font-semibold transition-all border-b-2 cursor-pointer ${
-              activeTab === 'single'
+            className={`flex-1 pb-2.5 text-sm font-semibold transition-all border-b-2 cursor-pointer ${activeTab === 'single'
                 ? 'border-primary text-primary'
                 : 'border-transparent text-ink-muted hover:text-ink'
-            }`}
+              }`}
             disabled={uploading}
           >
             Single File
           </button>
           <button
             onClick={() => { if (!uploading) { setActiveTab('chunked'); clearFile(); } }}
-            className={`flex-1 pb-2.5 text-sm font-semibold transition-all border-b-2 cursor-pointer ${
-              activeTab === 'chunked'
+            className={`flex-1 pb-2.5 text-sm font-semibold transition-all border-b-2 cursor-pointer ${activeTab === 'chunked'
                 ? 'border-primary text-primary'
                 : 'border-transparent text-ink-muted hover:text-ink'
-            }`}
+              }`}
             disabled={uploading}
           >
             Chunked Upload
@@ -207,11 +205,10 @@ export const UploadModal = ({ isOpen, onClose, onUploadSuccess }) => {
             onDragLeave={handleDrag}
             onDrop={handleDrop}
             onClick={() => fileInputRef.current?.click()}
-            className={`border-2 border-dashed rounded-lg p-10 flex flex-col items-center justify-center text-center cursor-pointer transition-colors ${
-              dragActive
+            className={`border-2 border-dashed rounded-lg p-10 flex flex-col items-center justify-center text-center cursor-pointer transition-colors ${dragActive
                 ? 'border-primary bg-primary/5'
                 : 'border-hairline hover:bg-canvas-soft'
-            }`}
+              }`}
           >
             <input
               type="file"

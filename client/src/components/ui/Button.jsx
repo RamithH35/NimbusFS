@@ -11,11 +11,11 @@ export const Button = ({
   ...props
 }) => {
   const baseClasses = 'inline-flex items-center justify-center font-medium transition-colors focus:outline-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed select-none';
-  
+
   const variantClasses = {
     primary: 'bg-primary text-white hover:bg-primary-active rounded-full',
-    secondary: 'bg-white border border-hairline text-ink-secondary hover:bg-canvas-soft rounded-full',
-    utility: 'bg-white border border-hairline text-ink-secondary hover:bg-canvas-soft rounded-md',
+    secondary: 'bg-surface border border-hairline text-ink-secondary hover:bg-canvas-soft rounded-full',
+    utility: 'bg-surface border border-hairline text-ink-secondary hover:bg-canvas-soft rounded-md',
   };
 
   const sizeClasses = {
