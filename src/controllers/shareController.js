@@ -1,6 +1,7 @@
 import FileModel from '../storage/File.js';
 import { storageManager } from '../storage/storageManager.js';
 import { canAccess } from '../utils/fileAccess.js';
+import { decrypt } from '../utils/encryption.js';
 
 /**
  * @desc    Get public shared file by shareId
@@ -48,6 +49,8 @@ export const getShare = async (req, res) => {
 
     // Stream download from correct provider
     const stream = await storageManager.download(fileRecord.storedName, fileRecord.provider);
+    
+    const chunks = [];
     stream.on('error', (err) => {
       console.error('Share download stream error:', err);
       if (!res.headersSent) {
@@ -55,7 +58,18 @@ export const getShare = async (req, res) => {
       }
     });
 
-    stream.pipe(res);
+    for await (const chunk of stream) {
+      chunks.push(chunk);
+    }
+    const encryptedBuffer = Buffer.concat(chunks);
+
+    // Decrypt if iv and authTag are present
+    let decryptedBuffer = encryptedBuffer;
+    if (fileRecord.iv && fileRecord.authTag) {
+      decryptedBuffer = decrypt(encryptedBuffer, fileRecord.iv, fileRecord.authTag);
+    }
+
+    res.send(decryptedBuffer);
   } catch (error) {
     console.error('Get share controller error:', error);
     return res.status(500).json({ error: 'Internal server error during download' });

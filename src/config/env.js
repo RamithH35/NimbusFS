@@ -17,6 +17,8 @@ export const SUPABASE_BUCKET = process.env.SUPABASE_BUCKET || 'nimbusfs-files';
 
 export const REDIS_URL = process.env.REDIS_URL || '';
 export const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
+export const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || '';
+export const CHUNK_SIZE_KB = parseInt(process.env.CHUNK_SIZE_KB, 10) || 512;
 
 // Run strict validation on startup
 const requiredEnv = {
@@ -36,4 +38,9 @@ for (const [key, value] of Object.entries(requiredEnv)) {
   if (!value) {
     throw new Error(`CRITICAL ERROR: Environment variable '${key}' is not defined.`);
   }
+}
+
+// Validate ENCRYPTION_KEY format (64 hex characters represent 32 bytes)
+if (!ENCRYPTION_KEY || !/^[0-9a-fA-F]{64}$/.test(ENCRYPTION_KEY)) {
+  throw new Error("CRITICAL ERROR: 'ENCRYPTION_KEY' must be exactly 64 hex characters (32 bytes).");
 }

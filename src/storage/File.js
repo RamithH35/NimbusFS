@@ -54,6 +54,14 @@ const fileSchema = new mongoose.Schema({
     type: Number,
     default: 0,
   },
+  iv: {
+    type: String,
+    default: null,
+  },
+  authTag: {
+    type: String,
+    default: null,
+  },
   hash: {
     type: String, // SHA-256 of file buffer
     required: [true, 'File hash is required'],
@@ -67,9 +75,15 @@ const fileSchema = new mongoose.Schema({
 // Sparse index for fast lookups by share ID
 fileSchema.index({ shareId: 1 }, { sparse: true });
 
-// Exclude sharePasswordHash from all serializations
+// Compound index for fast deduplication lookups
+fileSchema.index({ hash: 1, ownerId: 1 });
+
+// Exclude sensitive fields from all serializations
 const cleanResponse = (doc, ret) => {
   delete ret.sharePasswordHash;
+  delete ret.iv;
+  delete ret.authTag;
+  delete ret.hash;
   return ret;
 };
 fileSchema.set('toJSON', { transform: cleanResponse });

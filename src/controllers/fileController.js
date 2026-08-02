@@ -7,6 +7,8 @@ import { MAX_FILE_SIZE_MB, FRONTEND_URL } from '../config/env.js';
 import { nanoid } from 'nanoid';
 import bcrypt from 'bcrypt';
 import { canAccess } from '../utils/fileAccess.js';
+import { computeHash } from '../utils/hashing.js';
+import { encrypt, decrypt } from '../utils/encryption.js';
 
 // Define supported safe MIME types
 const allowedImageTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml', 'image/bmp'];
@@ -68,13 +70,27 @@ export const uploadFile = async (req, res) => {
       return res.status(415).json({ error: 'Unsupported file type' });
     }
 
-    // 3. Compute SHA-256 hash of the file buffer
-    const hash = crypto.createHash('sha256').update(file.buffer).digest('hex');
+    // 3. Compute SHA-256 hash of the original plaintext buffer
+    const hash = computeHash(file.buffer);
 
-    // 4. Upload via storage manager (passing ownerId for logging)
+    // 4. Check deduplication (user-scoped)
+    const duplicate = await FileModel.findOne({ hash, ownerId: req.user._id });
+    if (duplicate) {
+      const dupObj = duplicate.toObject();
+      dupObj.isDuplicate = true;
+      return res.status(200).json(dupObj);
+    }
+
+    // 5. If no duplicate: encrypt the buffer
+    const { encryptedBuffer, iv, authTag } = encrypt(file.buffer);
+
+    // Mutate file.buffer to point to encryptedBuffer so storageManager.upload works seamlessly
+    file.buffer = encryptedBuffer;
+
+    // 6. Upload via storage manager (passing ownerId for logging)
     const uploadResult = await storageManager.upload(file, req.user._id);
 
-    // 5. Save metadata to database
+    // 7. Save metadata to database
     const newFile = new FileModel({
       _id: uploadResult._id,
       ownerId: req.user._id,
@@ -84,6 +100,8 @@ export const uploadFile = async (req, res) => {
       mimeType: detectedMime,
       size: file.size,
       hash,
+      iv,
+      authTag,
     });
     await newFile.save();
 
@@ -126,6 +144,8 @@ export const downloadFile = async (req, res) => {
 
     // Stream download
     const stream = await storageManager.download(fileRecord.storedName, fileRecord.provider);
+    
+    const chunks = [];
     stream.on('error', (err) => {
       console.error('Download read stream error:', err);
       if (!res.headersSent) {
@@ -133,7 +153,18 @@ export const downloadFile = async (req, res) => {
       }
     });
 
-    stream.pipe(res);
+    for await (const chunk of stream) {
+      chunks.push(chunk);
+    }
+    const encryptedBuffer = Buffer.concat(chunks);
+
+    // Decrypt if iv and authTag are present
+    let decryptedBuffer = encryptedBuffer;
+    if (fileRecord.iv && fileRecord.authTag) {
+      decryptedBuffer = decrypt(encryptedBuffer, fileRecord.iv, fileRecord.authTag);
+    }
+
+    res.send(decryptedBuffer);
   } catch (error) {
     console.error('File download controller error:', error);
     return res.status(500).json({ error: 'Internal server error during download' });
