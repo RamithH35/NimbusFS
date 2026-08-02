@@ -76,7 +76,7 @@ export const uploadFile = async (req, res) => {
       ownerId: req.user._id,
       originalName: file.originalname,
       storedName: uploadResult.storedName,
-      provider: 'local',
+      provider: uploadResult.provider || 'local',
       mimeType: detectedMime,
       size: file.size,
       hash,
@@ -110,7 +110,7 @@ export const downloadFile = async (req, res) => {
     );
 
     // Stream download
-    const stream = storageManager.download(fileRecord.storedName);
+    const stream = await storageManager.download(fileRecord.storedName, fileRecord.provider);
     stream.on('error', (err) => {
       console.error('Download read stream error:', err);
       if (!res.headersSent) {
@@ -169,7 +169,7 @@ export const deleteFile = async (req, res) => {
 
     // Delete from storage provider first
     try {
-      await storageManager.delete(fileRecord.storedName);
+      await storageManager.delete(fileRecord.storedName, fileRecord.provider);
     } catch (storageError) {
       console.error('Storage provider delete failed:', storageError);
       // Return 500 and preserve Mongoose metadata if file deletion fails

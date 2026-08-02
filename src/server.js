@@ -7,6 +7,7 @@ import mongoose from 'mongoose';
 import cookieParser from 'cookie-parser';
 import authRouter from './auth/authRoutes.js';
 import fileRouter from './routes/fileRoutes.js';
+import healthRouter from './routes/healthRoutes.js';
 
 const app = express();
 
@@ -48,6 +49,9 @@ app.use('/api/auth', authRouter);
 
 // File Routes
 app.use('/api/files', fileRouter);
+
+// Health Routes
+app.use('/api/health', healthRouter);
 
 // Basic health check endpoint
 app.get('/health', (req, res) => {
