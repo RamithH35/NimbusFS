@@ -12,4 +12,24 @@ export const CLOUDINARY_API_KEY = process.env.CLOUDINARY_API_KEY || '';
 export const CLOUDINARY_API_SECRET = process.env.CLOUDINARY_API_SECRET || '';
 
 export const SUPABASE_URL = process.env.SUPABASE_URL || '';
-export const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || '';
+export const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+export const SUPABASE_BUCKET = process.env.SUPABASE_BUCKET || 'nimbusfs-files';
+
+// Run strict validation on startup
+const requiredEnv = {
+  MONGO_URI,
+  JWT_SECRET,
+  REFRESH_TOKEN_SECRET,
+  CLOUDINARY_CLOUD_NAME,
+  CLOUDINARY_API_KEY,
+  CLOUDINARY_API_SECRET,
+  SUPABASE_URL,
+  SUPABASE_SERVICE_ROLE_KEY,
+  SUPABASE_BUCKET,
+};
+
+for (const [key, value] of Object.entries(requiredEnv)) {
+  if (!value) {
+    throw new Error(`CRITICAL ERROR: Environment variable '${key}' is not defined.`);
+  }
+}

@@ -1,8 +1,12 @@
 import { localProvider } from '../providers/local/localProvider.js';
+import { cloudinaryProvider } from '../providers/cloudinary/cloudinaryProvider.js';
+import { supabaseProvider } from '../providers/supabase/supabaseProvider.js';
 
-// List of registered storage providers.
-// Future providers (e.g. Cloudinary, Supabase) will be added here in Phase 4.
-const providers = [localProvider];
+// List of registered storage providers in priority order:
+// 1. Cloudinary (first choice)
+// 2. Supabase (fallback choice)
+// 3. Local (last fallback)
+const providers = [cloudinaryProvider, supabaseProvider, localProvider];
 
 // Lookup map for fast provider routing by name.
 const providerMap = new Map(providers.map(p => [p.name, p]));
