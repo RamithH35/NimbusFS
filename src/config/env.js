@@ -16,6 +16,7 @@ export const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY |
 export const SUPABASE_BUCKET = process.env.SUPABASE_BUCKET || 'nimbusfs-files';
 
 export const REDIS_URL = process.env.REDIS_URL || '';
+export const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
 
 // Run strict validation on startup
 const requiredEnv = {

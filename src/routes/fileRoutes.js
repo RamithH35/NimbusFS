@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import multer from 'multer';
-import { uploadFile, downloadFile, listFiles, deleteFile } from '../controllers/fileController.js';
+import { uploadFile, downloadFile, listFiles, deleteFile, shareFile, revokeShare } from '../controllers/fileController.js';
 import { protect } from '../middleware/auth.js';
 
 const router = Router();
@@ -20,5 +20,9 @@ router.post('/upload', upload.single('file'), uploadFile);
 router.get('/:id/download', downloadFile);
 router.get('/', listFiles);
 router.delete('/:id', deleteFile);
+
+// Sharing operations
+router.post('/:id/share', shareFile);
+router.post('/:id/revoke-share', revokeShare);
 
 export default router;

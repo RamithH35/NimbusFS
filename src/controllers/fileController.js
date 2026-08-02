@@ -3,7 +3,10 @@ import path from 'path';
 import { fileTypeFromBuffer } from 'file-type';
 import FileModel from '../storage/File.js';
 import { storageManager } from '../storage/storageManager.js';
-import { MAX_FILE_SIZE_MB } from '../config/env.js';
+import { MAX_FILE_SIZE_MB, FRONTEND_URL } from '../config/env.js';
+import { nanoid } from 'nanoid';
+import bcrypt from 'bcrypt';
+import { canAccess } from '../utils/fileAccess.js';
 
 // Define supported safe MIME types
 const allowedImageTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml', 'image/bmp'];
@@ -104,9 +107,13 @@ export const uploadFile = async (req, res) => {
 export const downloadFile = async (req, res) => {
   try {
     const fileRecord = await FileModel.findById(req.params.id);
+    if (!fileRecord) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
 
-    // Checks ownership BEFORE calling storage provider, and does not leak file existence
-    if (!fileRecord || fileRecord.ownerId.toString() !== req.user._id.toString()) {
+    // Use central access control utility
+    const access = await canAccess(fileRecord, req);
+    if (!access.allowed) {
       return res.status(403).json({ error: 'Forbidden' });
     }
 
@@ -192,5 +199,100 @@ export const deleteFile = async (req, res) => {
   } catch (error) {
     console.error('File delete controller error:', error);
     return res.status(500).json({ error: 'Internal server error during deletion' });
+  }
+};
+
+// @desc    Share file
+// @route   POST /api/files/:id/share
+// @access  Private (Owner only)
+export const shareFile = async (req, res) => {
+  try {
+    const fileRecord = await FileModel.findById(req.params.id);
+    if (!fileRecord) {
+      return res.status(404).json({ error: 'File not found' });
+    }
+
+    // Verify ownership
+    if (fileRecord.ownerId.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const { expiresIn, password, maxDownloads } = req.body;
+
+    // Generate 21-character URL-safe nanoid
+    const shareId = nanoid(21);
+
+    // Calculate expiry
+    let expiresAt = null;
+    if (expiresIn === '1h') {
+      expiresAt = new Date(Date.now() + 60 * 60 * 1000);
+    } else if (expiresIn === '1d') {
+      expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    } else if (expiresIn === '7d') {
+      expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+    }
+
+    // Hash password if provided
+    let sharePasswordHash = null;
+    if (password) {
+      sharePasswordHash = await bcrypt.hash(password, 10);
+    }
+
+    fileRecord.visibility = 'shared';
+    fileRecord.shareId = shareId;
+    fileRecord.expiresAt = expiresAt;
+    fileRecord.sharePasswordHash = sharePasswordHash;
+    fileRecord.maxDownloads = maxDownloads ? parseInt(maxDownloads, 10) : null;
+    fileRecord.downloadCount = 0;
+
+    await fileRecord.save();
+
+    const host = FRONTEND_URL.replace(/^https?:\/\//, '');
+    const shareUrl = `https://${host}/share/${shareId}`;
+
+    const fileObj = fileRecord.toObject();
+    delete fileObj.sharePasswordHash;
+
+    return res.status(200).json({
+      shareUrl,
+      file: fileObj,
+    });
+  } catch (error) {
+    console.error('Share file controller error:', error);
+    return res.status(500).json({ error: 'Internal server error during share' });
+  }
+};
+
+// @desc    Revoke shared file
+// @route   POST /api/files/:id/revoke-share
+// @access  Private (Owner only)
+export const revokeShare = async (req, res) => {
+  try {
+    const fileRecord = await FileModel.findById(req.params.id);
+    if (!fileRecord) {
+      return res.status(404).json({ error: 'File not found' });
+    }
+
+    // Verify ownership
+    if (fileRecord.ownerId.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    fileRecord.visibility = 'private';
+    fileRecord.shareId = null;
+    fileRecord.sharePasswordHash = null;
+    fileRecord.expiresAt = null;
+    fileRecord.maxDownloads = null;
+    fileRecord.downloadCount = 0;
+
+    await fileRecord.save();
+
+    const fileObj = fileRecord.toObject();
+    delete fileObj.sharePasswordHash;
+
+    return res.status(200).json(fileObj);
+  } catch (error) {
+    console.error('Revoke share controller error:', error);
+    return res.status(500).json({ error: 'Internal server error revoking share' });
   }
 };

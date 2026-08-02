@@ -38,9 +38,21 @@ const fileSchema = new mongoose.Schema({
     type: String,
     default: null,
   },
+  sharePasswordHash: {
+    type: String,
+    default: null,
+  },
   expiresAt: {
     type: Date,
     default: null,
+  },
+  maxDownloads: {
+    type: Number,
+    default: null,
+  },
+  downloadCount: {
+    type: Number,
+    default: 0,
   },
   hash: {
     type: String, // SHA-256 of file buffer
@@ -51,6 +63,17 @@ const fileSchema = new mongoose.Schema({
     default: Date.now,
   },
 });
+
+// Sparse index for fast lookups by share ID
+fileSchema.index({ shareId: 1 }, { sparse: true });
+
+// Exclude sharePasswordHash from all serializations
+const cleanResponse = (doc, ret) => {
+  delete ret.sharePasswordHash;
+  return ret;
+};
+fileSchema.set('toJSON', { transform: cleanResponse });
+fileSchema.set('toObject', { transform: cleanResponse });
 
 const FileModel = mongoose.model('File', fileSchema);
 export default FileModel;

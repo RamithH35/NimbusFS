@@ -9,6 +9,7 @@ import authRouter from './auth/authRoutes.js';
 import fileRouter from './routes/fileRoutes.js';
 import healthRouter from './routes/healthRoutes.js';
 import adminRouter from './routes/adminRoutes.js';
+import shareRouter from './routes/shareRoutes.js';
 import { startUploadWorker } from './jobs/uploadWorker.js';
 import './jobs/redisConnection.js';
 
@@ -58,6 +59,9 @@ app.use('/api/health', healthRouter);
 
 // Admin Routes
 app.use('/api/admin', adminRouter);
+
+// Share Routes
+app.use('/api/share', shareRouter);
 
 // Basic health check endpoint
 app.get('/health', (req, res) => {

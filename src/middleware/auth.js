@@ -36,3 +36,27 @@ export const protect = async (req, res, next) => {
     return res.status(401).json({ error: 'Not authorized, invalid or expired token' });
   }
 };
+
+export const optionalProtect = async (req, res, next) => {
+  let token;
+
+  // Check Authorization header for Bearer token
+  if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
+    token = req.headers.authorization.split(' ')[1];
+  }
+
+  if (token) {
+    try {
+      const decoded = jwt.verify(token, JWT_SECRET);
+      const user = await User.findById(decoded.userId).select('-passwordHash');
+      
+      if (user && user.tokenVersion === decoded.tokenVersion) {
+        req.user = user;
+      }
+    } catch (error) {
+      console.warn('Optional auth middleware verification error:', error.message);
+      // Optional, so do not block request or return 401
+    }
+  }
+  next();
+};
