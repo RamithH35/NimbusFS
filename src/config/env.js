@@ -20,6 +20,15 @@ export const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
 export const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || '';
 export const CHUNK_SIZE_KB = parseInt(process.env.CHUNK_SIZE_KB, 10) || 512;
 
+// Rate Limit Configurations
+export const RATE_LIMIT_GLOBAL_MAX = parseInt(process.env.RATE_LIMIT_GLOBAL_MAX, 10) || 100;
+export const RATE_LIMIT_AUTH_MAX = parseInt(process.env.RATE_LIMIT_AUTH_MAX, 10) || 5;
+export const RATE_LIMIT_SHARE_MAX = parseInt(process.env.RATE_LIMIT_SHARE_MAX, 10) || 20;
+export const RATE_LIMIT_FORGOT_PASSWORD_MAX = parseInt(process.env.RATE_LIMIT_FORGOT_PASSWORD_MAX, 10) || 3;
+export const RATE_LIMIT_UPLOAD_MAX = parseInt(process.env.RATE_LIMIT_UPLOAD_MAX, 10) || 30;
+export const RATE_LIMIT_UPLOAD_CHUNK_MAX = parseInt(process.env.RATE_LIMIT_UPLOAD_CHUNK_MAX, 10) || 200;
+export const RATE_LIMIT_ADMIN_MAX = parseInt(process.env.RATE_LIMIT_ADMIN_MAX, 10) || 60;
+
 // Run strict validation on startup
 const requiredEnv = {
   MONGO_URI,

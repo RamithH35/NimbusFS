@@ -5,14 +5,16 @@
   --color-primary: #0075de;
   --color-primary-active: #005bab;
   --color-secondary: #213183;
-  --color-canvas: #ffffff;
-  --color-canvas-soft: #f6f5f4;
-  --color-surface: #ffffff;
-  --color-ink: #000000;
-  --color-ink-secondary: #31302e;
-  --color-ink-muted: #615d59;
-  --color-ink-faint: #a39e98;
-  --color-hairline: #e6e6e6;
+  --color-on-primary: #ffffff;
+  --color-canvas: #141414;
+  --color-canvas-soft: #191919;
+  --color-surface: #1f1f1f;
+  --color-canvas-card: #242424;
+  --color-ink: #ffffff;
+  --color-ink-secondary: #d4d4d4;
+  --color-ink-muted: #a0a0a0;
+  --color-ink-faint: #666666;
+  --color-hairline: #2e2e2e;
 
   --color-accent-green: #1aae39;
   --color-accent-orange: #dd5b00;
@@ -28,17 +30,6 @@
   --radius-full: 9999px;
 
   --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
-}
-
-[data-theme="dark"] {
-  --color-canvas: #191919;
-  --color-canvas-soft: #141414;
-  --color-surface: #1f1f1f;
-  --color-ink: #ffffff;
-  --color-ink-secondary: #d4d4d4;
-  --color-ink-muted: #a0a0a0;
-  --color-ink-faint: #666666;
-  --color-hairline: #2e2e2e;
 }
 
 body {

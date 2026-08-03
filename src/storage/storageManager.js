@@ -53,8 +53,14 @@ export const storageManager = {
     // --- STEP 1: Attempt Cloudinary ---
     let cloudinaryHealthy = false;
     try {
-      const health = await cloudinaryProvider.healthCheck();
-      cloudinaryHealthy = health.healthy;
+      // Check if testing requests failover mock
+      const isMockUnhealthy = file.mockUnhealthy === true;
+      if (isMockUnhealthy) {
+        cloudinaryHealthy = false;
+      } else {
+        const health = await cloudinaryProvider.healthCheck();
+        cloudinaryHealthy = health.healthy;
+      }
     } catch (e) {
       cloudinaryHealthy = false;
     }

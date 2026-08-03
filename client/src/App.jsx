@@ -2,7 +2,6 @@ import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ToastProvider } from './context/ToastContext';
-import { ThemeProvider } from './context/ThemeContext';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
@@ -58,8 +57,7 @@ const PublicOnlyRoute = ({ children }) => {
 
 export default function App() {
   return (
-    <ThemeProvider>
-      <ToastProvider>
+    <ToastProvider>
         <AuthProvider>
           <BrowserRouter>
             <Routes>
@@ -125,6 +123,5 @@ export default function App() {
           </BrowserRouter>
         </AuthProvider>
       </ToastProvider>
-    </ThemeProvider>
   );
 }

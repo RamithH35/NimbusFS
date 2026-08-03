@@ -25,14 +25,26 @@ if (!allowedOrigin) {
 }
 
 app.use(cors({
-  origin: allowedOrigin || '',
+  origin: (origin, callback) => {
+    // If no origin (e.g. server-to-server or curl), allow it or reject depending on requirements.
+    // For standard web app security:
+    if (!origin) {
+      return callback(null, true);
+    }
+    if (origin === allowedOrigin) {
+      return callback(null, true);
+    }
+    return callback(new Error('Not allowed by CORS'));
+  },
   credentials: true,
 }));
 
-// Apply global rate limiter (100 requests per 15 minutes per IP)
+import { RATE_LIMIT_GLOBAL_MAX } from './config/env.js';
+
+// Apply global rate limiter (100 requests per 15 minutes per IP by default)
 const globalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // Limit each IP to 100 requests per window
+  max: RATE_LIMIT_GLOBAL_MAX, // Limit each IP per window
   message: {
     status: 429,
     message: 'Too many requests from this IP, please try again after 15 minutes.',
@@ -66,6 +78,16 @@ app.use('/api/share', shareRouter);
 // Basic health check endpoint
 app.get('/health', (req, res) => {
   res.status(200).json({ status: 'OK', message: 'NimbusFS Server is healthy.' });
+});
+
+// Global error handling middleware
+app.use((err, req, res, next) => {
+  console.error('Unhandled server error:', err);
+  const isProduction = process.env.NODE_ENV === 'production';
+  res.status(err.status || 500).json({
+    error: isProduction ? 'Internal server error' : err.message,
+    ...(isProduction ? {} : { stack: err.stack }),
+  });
 });
 
 // Database connection and server initialization

@@ -87,6 +87,11 @@ export const uploadFile = async (req, res) => {
 
     // Mutate file.buffer to point to encryptedBuffer so storageManager.upload works seamlessly
     file.buffer = encryptedBuffer;
+    
+    // Check for test mock failover flag
+    if (req.headers['x-mock-cloudinary-unhealthy'] === 'true') {
+      file.mockUnhealthy = true;
+    }
 
     // 6. Upload via storage manager (passing ownerId for logging)
     const uploadResult = await storageManager.upload(file, req.user._id);

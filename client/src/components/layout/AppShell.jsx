@@ -1,12 +1,29 @@
 import React, { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import ThemeToggle from '../ui/ThemeToggle';
+import { apiFetch } from '../../api/client';
 
 export const AppShell = ({ children }) => {
-  const { user } = useAuth();
+  const { user, token, logout } = useAuth();
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const navigate = useNavigate();
+
+  const handleLogout = async () => {
+    try {
+      if (token) {
+        await apiFetch('/api/auth/logout', {
+          method: 'POST',
+        });
+      }
+    } catch (err) {
+      console.error('Logout error:', err.message);
+    } finally {
+      localStorage.removeItem('nimbusfs_token');
+      localStorage.removeItem('nimbusfs_theme');
+      logout();
+      navigate('/login');
+    }
+  };
 
   const toggleMobileSidebar = () => {
     setMobileSidebarOpen(!mobileSidebarOpen);
@@ -139,24 +156,42 @@ export const AppShell = ({ children }) => {
       {/* User info and settings footer */}
       <div className="p-4 border-t border-hairline space-y-4">
         {user && (
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full border border-hairline bg-canvas-soft overflow-hidden flex items-center justify-center shrink-0">
-              <img
-                src={`https://api.dicebear.com/9.x/notionists/svg?seed=${user.avatarSeed}`}
-                alt="User Avatar"
-                className="w-full h-full object-cover"
-              />
+          <div className="space-y-3">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full border border-hairline bg-canvas-soft overflow-hidden flex items-center justify-center shrink-0">
+                <img
+                  src={`https://api.dicebear.com/9.x/notionists/svg?seed=${user.avatarSeed}`}
+                  alt="User Avatar"
+                  className="w-full h-full object-cover"
+                />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-semibold text-ink truncate">{user.name}</p>
+                <p className="text-xs text-ink-muted truncate">{user.email}</p>
+              </div>
             </div>
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-semibold text-ink truncate">{user.name}</p>
-              <p className="text-xs text-ink-muted truncate">{user.email}</p>
-            </div>
+            <button
+              onClick={handleLogout}
+              className="flex items-center gap-2 w-full px-3 py-2 text-xs font-medium text-ink-muted hover:text-ink hover:bg-canvas-soft rounded-xs border border-hairline transition-colors cursor-pointer"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 24 24"
+                strokeWidth={1.5}
+                stroke="currentColor"
+                className="w-4 h-4"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6a2.25 2.25 0 0 0-2.25 2.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V15M12 9l-3 3m0 0 3 3m-3-3h12.75"
+                />
+              </svg>
+              <span>Sign Out</span>
+            </button>
           </div>
         )}
-
-        <div className="flex items-center justify-center pt-2 border-t border-hairline">
-          <ThemeToggle />
-        </div>
       </div>
     </div>
   );
@@ -188,7 +223,26 @@ export const AppShell = ({ children }) => {
           </button>
           <span className="text-base font-bold text-ink font-sans tracking-tight">NimbusFS</span>
         </div>
-        <ThemeToggle />
+        <button
+          onClick={handleLogout}
+          className="p-1.5 rounded-md text-ink-muted hover:text-ink hover:bg-canvas-soft cursor-pointer"
+          aria-label="Sign Out"
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            fill="none"
+            viewBox="0 0 24 24"
+            strokeWidth={1.5}
+            stroke="currentColor"
+            className="w-5 h-5"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6a2.25 2.25 0 0 0-2.25 2.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V15M12 9l-3 3m0 0 3 3m-3-3h12.75"
+            />
+          </svg>
+        </button>
       </header>
 
       {/* Desktop Left Sidebar (always visible on md+) */}
