@@ -1,0 +1,29 @@
+name: Keep Services Alive
+on:
+  schedule:
+    - cron: '0 6 * * 1'   # every Monday 6am UTC
+  workflow_dispatch:        # lets you trigger manually too
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Supabase
+        run: |
+          curl -s "${{ secrets.SUPABASE_URL }}/rest/v1/" \
+            -H "apikey: ${{ secrets.SUPABASE_ANON_KEY }}"
+
+      - name: Ping Upstash Redis (real write, not just PING)
+        run: |
+          curl -s "${{ secrets.UPSTASH_REDIS_REST_URL }}/set/keepalive/$(date +%s)" \
+            -H "Authorization: Bearer ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}"
+
+      - name: Ping MongoDB Atlas
+        run: |
+          python3 -c "
+          import pymongo, os
+          client = pymongo.MongoClient(os.environ['MONGODB_URI'])
+          client.admin.command('ping')
+          "
+        env:
+          MONGODB_URI: ${{ secrets.MONGODB_URI }}
