@@ -3,7 +3,6 @@ on:
   schedule:
     - cron: '0 6 * * 1'
   workflow_dispatch:
-
 jobs:
   ping:
     runs-on: ubuntu-latest
@@ -20,9 +19,15 @@ jobs:
       - name: Ping Upstash Redis (real write)
         run: |
           redis-cli -u "${{ secrets.UPSTASH_REDIS_URL }}" SET keepalive "$(date +%s)"
-      
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
       - name: Install pymongo
-        run: python3 -m pip install pymongo
+        run: pip install pymongo
+
       - name: Ping MongoDB Atlas
         run: |
           python3 -c "
