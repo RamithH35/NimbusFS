@@ -20,8 +20,9 @@ jobs:
       - name: Ping Upstash Redis (real write)
         run: |
           redis-cli -u "${{ secrets.UPSTASH_REDIS_URL }}" SET keepalive "$(date +%s)"
+      
       - name: Install pymongo
-        run: pip install pymongo
+        run: python3 -m pip install pymongo
       - name: Ping MongoDB Atlas
         run: |
           python3 -c "
