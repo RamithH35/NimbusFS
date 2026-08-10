@@ -23,8 +23,8 @@ By decoupling the storage interface from specific cloud providers, NimbusFS impl
 | **Failover Storage Engine** | Pre-upload health checks and inline fallbacks when the primary provider goes down. | **IMPLEMENTED** |
 | **Background Upload Worker** | BullMQ and Redis job queuing for asynchronous retries of failed uploads. | **IMPLEMENTED** |
 | **Active Token Invalidation** | Version-based JWT invalidation on user logout. | **IMPLEMENTED** |
-| **Chunked File Uploads** | Multi-part upload initialization, chunk storage, and reassembly. | **PARTIALLY IMPLEMENTED** (Integration Bug Present) |
-| **Self-Service Password Reset** | Forgotten password reset request and email generation. | **PRESENT BUT UNUSED** (UI exists, backend route absent) |
+| **Chunked File Uploads** | Multi-part upload initialization, chunk storage, and reassembly. | **IMPLEMENTED** |
+| **Self-Service Password Reset** | Forgotten password reset request form. | **DISABLED** (Form disabled in UI; requires mail server infrastructure) |
 | **Automated Test Suite** | In-code unit/integration tests running via `npm test`. | **NOT FOUND** (Audit log exists, but test scripts/code are absent) |
 
 ---
@@ -313,11 +313,9 @@ You can verify the API contract manually using postman/curl queries based on the
 
 ## Current Limitations & Known Issues
 
-1. **Broken Chunked Uploads (Zod Schema Mismatch)**:
-   The client-side uploader sends the key `totalSize` when initializing chunked uploads, while the Zod schema in [validate.js](file:///c:/Users/ramit/Resume_projects/NimbusFS/src/middleware/validate.js#L72) enforces the key `size`. This causes all chunked uploads to fail validation with an HTTP `400` error code.
-2. **Stateful Chunks**:
+1. **Stateful Chunks**:
    Chunks are stored in-memory in a JavaScript `Map` on the server instance. Scaling the backend horizontally behind a standard load balancer without sticky sessions will result in fragmented uploads.
-3. **No Database Transaction Safeguards**:
+2. **No Database Transaction Safeguards**:
    If a file upload succeeds on a cloud provider but the server crashes before saving the metadata to MongoDB, the cloud asset becomes orphaned. There is no cleanup process or database transaction to rollback orphaned uploads.
 
 ---
