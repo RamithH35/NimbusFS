@@ -104,7 +104,7 @@ Client            Express API         Deduplication Check      AES-256-GCM      
 3. Access authorization checks are performed (validating ownership, expiration, downloads, and link password).
 4. If allowed, server streams the encrypted binary payload from the mapped provider.
 5. Server buffers the chunks and decrypts them using the file's saved `iv` and `authTag`.
-6. Server sets content headers (`Content-Disposition`) and streams the plaintext binary back to the client.
+6. Server sets content headers (`Content-Disposition`) and sends the decrypted plaintext buffer to the client.
 
 ---
 
@@ -207,7 +207,7 @@ erDiagram
 | **POST** | `/api/files/upload/init` | Initialize chunked upload session | **Yes** |
 | **POST** | `/api/files/upload/chunk` | Upload individual file chunk | **Yes** |
 | **POST** | `/api/files/upload/complete` | Reassemble, encrypt, and commit chunked file | **Yes** |
-| **GET** | `/api/files/:id/download` | Decrypt and stream file to owner | **Yes** |
+| **GET** | `/api/files/:id/download` | Decrypt and send file buffer to owner | **Yes** |
 | **GET** | `/api/files` | Get user's uploaded files (paginated) | **Yes** |
 | **DELETE**| `/api/files/:id` | Delete file from db and active provider | **Yes** |
 | **POST** | `/api/files/:id/share` | Generate public access credentials for a file | **Yes** |
