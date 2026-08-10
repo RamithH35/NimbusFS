@@ -46,43 +46,21 @@ export const ForgotPasswordPage = () => {
           <p className="text-sm text-ink-muted mt-1">Reset your account password</p>
         </div>
 
-        <Card elevated={true} className="flex flex-col text-center">
-          {!submitted ? (
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <p className="text-xs text-ink-secondary text-left mb-2">
-                Enter your email address below and we'll send you a password reset link if your account exists.
-              </p>
-              <Input
-                label="Email Address"
-                type="email"
-                placeholder="name@nimbusfs.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                disabled={loading}
-              />
+        <Card elevated={true} className="flex flex-col text-center p-6">
+          <div className="space-y-4 py-2">
+            <div className="text-accent-orange text-3xl font-bold select-none">⚠</div>
+            <p className="text-sm text-ink-secondary font-semibold">
+              Password Reset Disabled
+            </p>
+            <p className="text-xs text-ink-muted px-4 leading-relaxed">
+              Self-service password resets are currently disabled because email infrastructure has not been configured for this environment.
+            </p>
+            <p className="text-xs text-ink-muted px-4 leading-relaxed">
+              Please contact your administrator directly to reset your account password.
+            </p>
+          </div>
 
-              <Button
-                type="submit"
-                variant="primary"
-                loading={loading}
-                className="w-full mt-2"
-              >
-                Send Reset Link
-              </Button>
-            </form>
-          ) : (
-            <div className="space-y-4 py-4">
-              <div className="text-accent-green text-3xl font-bold select-none">✓</div>
-              <p className="text-sm text-ink-secondary font-medium">
-                Check your inbox
-              </p>
-              <p className="text-xs text-ink-muted px-4">
-                If that email exists, we have sent a link to reset your password. Please check your spam folder if you do not receive it in a few minutes.
-              </p>
-            </div>
-          )}
-
-          <div className="mt-6 text-center text-xs text-ink-muted">
+          <div className="mt-6 text-center text-xs text-ink-muted border-t border-hairline pt-4">
             <Link to="/login" className="text-primary hover:underline font-medium">
               Back to login
             </Link>

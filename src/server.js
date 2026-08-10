@@ -82,6 +82,12 @@ app.get('/health', (req, res) => {
 
 // Global error handling middleware
 app.use((err, req, res, next) => {
+  if (err.code === 'LIMIT_FILE_SIZE') {
+    const limitMb = process.env.MAX_FILE_SIZE_MB || 10;
+    return res.status(413).json({
+      error: `File size exceeds the limit of ${limitMb}MB`,
+    });
+  }
   console.error('Unhandled server error:', err);
   const isProduction = process.env.NODE_ENV === 'production';
   res.status(err.status || 500).json({

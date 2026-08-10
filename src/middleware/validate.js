@@ -69,7 +69,7 @@ export const initChunkSchema = z.object({
   body: z.object({
     originalName: z.string().min(1),
     mimeType: z.string().min(1),
-    size: z.number().int().positive(),
+    totalSize: z.number().int().positive(),
     totalChunks: z.number().int().min(1).max(100),
   }),
 });

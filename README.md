@@ -262,27 +262,30 @@ Create a `.env` file in the backend root based on `.env.example`:
 
 ```ini
 PORT=5000
-MONGO_URI=mongodb://localhost:27017/nimbusfs
+NODE_ENV=development
 ALLOWED_ORIGIN=http://localhost:5173
-JWT_SECRET=your_jwt_access_secret_key
-REFRESH_TOKEN_SECRET=your_jwt_refresh_secret_key
+
+MONGO_URI=
+
+JWT_SECRET=
+REFRESH_TOKEN_SECRET=
+
 MAX_FILE_SIZE_MB=10
 
-# Cloudinary Setup
-CLOUDINARY_CLOUD_NAME=your_cloud_name
-CLOUDINARY_API_KEY=your_api_key
-CLOUDINARY_API_SECRET=your_api_secret
+CLOUDINARY_CLOUD_NAME=
+CLOUDINARY_API_KEY=
+CLOUDINARY_API_SECRET=
 
-# Supabase Setup
-SUPABASE_URL=your_supabase_project_url
-SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
+SUPABASE_URL=
+SUPABASE_SERVICE_ROLE_KEY=
 SUPABASE_BUCKET=nimbusfs-files
 
-# Redis Connection (BullMQ)
 REDIS_URL=redis://127.0.0.1:6379
 
-# AES-256-GCM Symmetric Key (Must be exactly 64 hex characters)
-ENCRYPTION_KEY=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+FRONTEND_URL=http://localhost:5173
+
+# 32-byte AES-256-GCM key represented as 64 hexadecimal characters
+ENCRYPTION_KEY=
 ```
 
 ### Installation
