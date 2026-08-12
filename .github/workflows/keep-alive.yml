@@ -12,17 +12,13 @@ jobs:
     steps:
       - name: Ping Supabase Secondary (healthy instance)
         run: |
-          RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" \
-            -X POST "${{ secrets.SUPABASE_URL_2 }}/storage/v1/object/list/${{ secrets.SUPABASE_BUCKET_2 }}" \
+          curl -sf --max-time 15 \
+            "${{ secrets.SUPABASE_URL_2 }}/storage/v1/object/list/${{ secrets.SUPABASE_BUCKET_2 }}" \
             -H "apikey: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY_2 }}" \
             -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY_2 }}" \
             -H "Content-Type: application/json" \
-            -d '{"prefix": "", "limit": 1}')
-          echo "Supabase Secondary response: $RESPONSE"
-          if [ "$RESPONSE" != "200" ]; then
-            echo "WARNING: Supabase Secondary returned $RESPONSE"
-            exit 1
-          fi
+            --data '{"prefix":"","limit":1}'
+          echo "Supabase Secondary ping OK"
 
       - name: Ping Upstash Redis
         run: |
@@ -32,20 +28,20 @@ jobs:
 
       - name: Ping MongoDB Atlas
         run: |
-          RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" \
-            "${{ secrets.MONGODB_URI }}" || echo "skipped")
-          echo "MongoDB ping attempted"
+          curl -sf --max-time 15 \
+            "${{ secrets.MONGODB_URI }}" \
+            --output /dev/null
+          echo "MongoDB Atlas ping OK"
 
-      - name: Ping Supabase Primary (best-effort, may fail while support ticket open)
+      - name: Ping Supabase Primary (best-effort while support ticket open)
         continue-on-error: true
         run: |
-          RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 \
-            -X POST "${{ secrets.SUPABASE_URL }}/storage/v1/object/list/${{ secrets.SUPABASE_BUCKET }}" \
+          curl -sf --max-time 10 \
+            "${{ secrets.SUPABASE_URL }}/storage/v1/object/list/${{ secrets.SUPABASE_BUCKET }}" \
             -H "apikey: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
             -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
             -H "Content-Type: application/json" \
-            -d '{"prefix": "", "limit": 1}')
-          echo "Supabase Primary response: $RESPONSE (best-effort — support ticket open)"
+            --data '{"prefix":"","limit":1}' || echo "Supabase Primary unreachable (support ticket open — non-blocking)"
 
       - name: Summary
-        run: echo "Keepalive completed at $(date)"
+        run: echo "All services pinged at $(date)"
