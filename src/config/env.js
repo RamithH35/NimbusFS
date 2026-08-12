@@ -15,6 +15,10 @@ export const SUPABASE_URL = process.env.SUPABASE_URL || '';
 export const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 export const SUPABASE_BUCKET = process.env.SUPABASE_BUCKET || 'nimbusfs-files';
 
+export const SUPABASE_URL_2 = process.env.SUPABASE_URL_2 || '';
+export const SUPABASE_SERVICE_ROLE_KEY_2 = process.env.SUPABASE_SERVICE_ROLE_KEY_2 || '';
+export const SUPABASE_BUCKET_2 = process.env.SUPABASE_BUCKET_2 || 'nimbusfs-files';
+
 export const REDIS_URL = process.env.REDIS_URL || '';
 export const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
 export const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || '';
@@ -40,6 +44,9 @@ const requiredEnv = {
   SUPABASE_URL,
   SUPABASE_SERVICE_ROLE_KEY,
   SUPABASE_BUCKET,
+  SUPABASE_URL_2,
+  SUPABASE_SERVICE_ROLE_KEY_2,
+  SUPABASE_BUCKET_2,
   REDIS_URL,
 };
 

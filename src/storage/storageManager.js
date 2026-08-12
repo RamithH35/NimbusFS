@@ -1,18 +1,61 @@
 import mongoose from 'mongoose';
 import { localProvider } from '../providers/local/localProvider.js';
 import { cloudinaryProvider } from '../providers/cloudinary/cloudinaryProvider.js';
-import { supabaseProvider } from '../providers/supabase/supabaseProvider.js';
+import { SupabaseProvider } from '../providers/supabase/supabaseProvider.js';
 import FailureLog from './FailureLog.js';
 import { addUploadRetryJob } from '../jobs/uploadQueue.js';
+import {
+  SUPABASE_URL,
+  SUPABASE_SERVICE_ROLE_KEY,
+  SUPABASE_BUCKET,
+  SUPABASE_URL_2,
+  SUPABASE_SERVICE_ROLE_KEY_2,
+  SUPABASE_BUCKET_2
+} from '../config/env.js';
+
+// Instantiate Supabase providers
+const supabasePrimary = new SupabaseProvider({
+  url: SUPABASE_URL,
+  serviceRoleKey: SUPABASE_SERVICE_ROLE_KEY,
+  bucket: SUPABASE_BUCKET,
+  name: 'supabase-primary'
+});
+
+const supabaseFallback = new SupabaseProvider({
+  url: SUPABASE_URL_2,
+  serviceRoleKey: SUPABASE_SERVICE_ROLE_KEY_2,
+  bucket: SUPABASE_BUCKET_2,
+  name: 'supabase-fallback'
+});
+
+// Setup 2000ms timeout wrapper for supabaseFallback healthCheck specifically
+const originalFallbackHealthCheck = supabaseFallback.healthCheck.bind(supabaseFallback);
+supabaseFallback.healthCheck = async () => {
+  let timeoutId;
+  const timeoutPromise = new Promise((resolve) => {
+    timeoutId = setTimeout(() => {
+      resolve({ healthy: false, latency: 2000, timedOut: true });
+    }, 2000);
+  });
+  try {
+    return await Promise.race([originalFallbackHealthCheck(), timeoutPromise]);
+  } finally {
+    clearTimeout(timeoutId);
+  }
+};
 
 // List of registered storage providers in priority order:
-// 1. Cloudinary (first choice)
-// 2. Supabase (fallback choice)
-// 3. Local (last fallback)
-const providers = [cloudinaryProvider, supabaseProvider, localProvider];
+// 1. Cloudinary
+// 2. Supabase Primary
+// 3. Supabase Fallback
+// 4. Local
+const providers = [cloudinaryProvider, supabasePrimary, supabaseFallback, localProvider];
 
-// Lookup map for fast provider routing by name.
-const providerMap = new Map(providers.map(p => [p.name, p]));
+// Lookup map for fast provider routing by name, with legacy support for 'supabase'.
+const providerMap = new Map([
+  ...providers.map(p => [p.name, p]),
+  ['supabase', supabasePrimary]
+]);
 
 export const storageManager = {
   /**
@@ -25,8 +68,14 @@ export const storageManager = {
   getHealthyProvider: async (excludeProvider = null, includeLocal = true) => {
     const list = includeLocal ? providers : providers.filter(p => p.name !== 'local');
     for (const provider of list) {
-      if (excludeProvider && provider.name === excludeProvider) {
-        continue;
+      if (excludeProvider) {
+        if (provider.name === excludeProvider) {
+          continue;
+        }
+        // If legacy 'supabase' is excluded, exclude both primary and fallback
+        if (excludeProvider === 'supabase' && provider.name.startsWith('supabase-')) {
+          continue;
+        }
       }
       try {
         const health = await provider.healthCheck();
@@ -98,56 +147,108 @@ export const storageManager = {
       failedLogs.push(log);
     }
 
-    // --- STEP 2: Attempt Supabase (Inline Fallback) ---
-    let supabaseHealthy = false;
+    // --- STEP 2: Attempt Supabase Primary (Inline Fallback) ---
+    let supabasePrimaryHealthy = false;
     try {
-      const health = await supabaseProvider.healthCheck();
-      supabaseHealthy = health.healthy;
+      const health = await supabasePrimary.healthCheck();
+      supabasePrimaryHealthy = health.healthy;
     } catch (e) {
-      supabaseHealthy = false;
+      supabasePrimaryHealthy = false;
     }
 
-    if (supabaseHealthy) {
+    if (supabasePrimaryHealthy) {
       try {
-        console.log('Attempting inline failover upload to Supabase...');
-        const result = await supabaseProvider.upload(file.buffer, file.originalname, file.mimetype);
+        console.log('Attempting inline failover upload to Supabase Primary...');
+        const result = await supabasePrimary.upload(file.buffer, file.originalname, file.mimetype);
 
-        // Resolve previous failed Cloudinary log
+        // Resolve previous failed Cloudinary logs
         for (const log of failedLogs) {
-          log.resolvedProvider = 'supabase';
+          log.resolvedProvider = 'supabase-primary';
           await log.save();
         }
 
         return {
           ...result,
           _id: fileId,
-          provider: 'supabase',
+          provider: 'supabase-primary',
         };
       } catch (uploadError) {
-        console.error('Supabase upload threw error:', uploadError.message);
+        console.error('Supabase Primary upload threw error:', uploadError.message);
         const log = new FailureLog({
-          provider: 'supabase',
+          provider: 'supabase-primary',
           operation: 'upload',
           errorMessage: uploadError.message,
           fileId,
           ownerId: ownerId ? new mongoose.Types.ObjectId(ownerId) : null,
         });
         await log.save();
+        failedLogs.push(log);
       }
     } else {
-      console.warn('Supabase health check reports unhealthy. Skipping inline fallback.');
+      console.warn('Supabase Primary health check reports unhealthy. Skipping.');
       const log = new FailureLog({
-        provider: 'supabase',
+        provider: 'supabase-primary',
         operation: 'upload',
-        errorMessage: 'Supabase provider unhealthy during upload health check',
+        errorMessage: 'Supabase Primary provider unhealthy during upload health check',
         fileId,
         ownerId: ownerId ? new mongoose.Types.ObjectId(ownerId) : null,
       });
       await log.save();
+      failedLogs.push(log);
     }
 
-    // --- STEP 3: Both Failed: Queue for Background retry ---
-    console.log('Both Cloudinary and Supabase uploads failed. Enqueuing BullMQ retry task...');
+    // --- STEP 3: Attempt Supabase Fallback (Second Fallback) ---
+    let supabaseFallbackHealthy = false;
+    try {
+      const health = await supabaseFallback.healthCheck();
+      supabaseFallbackHealthy = health.healthy;
+    } catch (e) {
+      supabaseFallbackHealthy = false;
+    }
+
+    if (supabaseFallbackHealthy) {
+      try {
+        console.log('Attempting inline failover upload to Supabase Fallback...');
+        const result = await supabaseFallback.upload(file.buffer, file.originalname, file.mimetype);
+
+        // Resolve previous failed logs
+        for (const log of failedLogs) {
+          log.resolvedProvider = 'supabase-fallback';
+          await log.save();
+        }
+
+        return {
+          ...result,
+          _id: fileId,
+          provider: 'supabase-fallback',
+        };
+      } catch (uploadError) {
+        console.error('Supabase Fallback upload threw error:', uploadError.message);
+        const log = new FailureLog({
+          provider: 'supabase-fallback',
+          operation: 'upload',
+          errorMessage: uploadError.message,
+          fileId,
+          ownerId: ownerId ? new mongoose.Types.ObjectId(ownerId) : null,
+        });
+        await log.save();
+        failedLogs.push(log);
+      }
+    } else {
+      console.warn('Supabase Fallback health check reports unhealthy. Skipping.');
+      const log = new FailureLog({
+        provider: 'supabase-fallback',
+        operation: 'upload',
+        errorMessage: 'Supabase Fallback provider unhealthy during upload health check',
+        fileId,
+        ownerId: ownerId ? new mongoose.Types.ObjectId(ownerId) : null,
+      });
+      await log.save();
+      failedLogs.push(log);
+    }
+
+    // --- STEP 4: All Cloud Providers Failed: Queue for Background retry ---
+    console.log('All cloud uploads failed. Enqueuing BullMQ retry task...');
     const fileBufferBase64 = file.buffer.toString('base64');
     
     await addUploadRetryJob({
@@ -155,7 +256,7 @@ export const storageManager = {
       originalName: file.originalname,
       mimeType: file.mimetype,
       ownerId,
-      excludeProvider: 'supabase', // Exclude Supabase in background job
+      excludeProvider: 'supabase', // Excludes both supabase instances in background job
       fileId: fileId.toString(),
     });
 
@@ -247,6 +348,7 @@ export const storageManager = {
             latency: health.latency,
             failures24h,
             lastFailure,
+            ...(health.timedOut ? { timedOut: true } : {})
           };
         } catch (error) {
           return {
@@ -269,3 +371,4 @@ export const storageManager = {
 };
 
 export default storageManager;
+

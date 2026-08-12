@@ -10,10 +10,15 @@ import {
 } from '../../config/env.js';
 
 export class SupabaseProvider extends StorageProvider {
-  constructor() {
-    super('supabase');
-    this.bucketName = SUPABASE_BUCKET;
-    this.supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+  constructor(config = {}) {
+    const url = config.url || SUPABASE_URL;
+    const serviceRoleKey = config.serviceRoleKey || SUPABASE_SERVICE_ROLE_KEY;
+    const bucket = config.bucket || SUPABASE_BUCKET;
+    const name = config.name || 'supabase';
+
+    super(name);
+    this.bucketName = bucket;
+    this.supabase = createClient(url, serviceRoleKey);
   }
 
   /**
