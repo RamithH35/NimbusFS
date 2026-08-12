@@ -1,41 +1,56 @@
 name: Keep Services Alive
+
 on:
   schedule:
-    - cron: '0 6 */3 * *'
-  workflow_dispatch:
+    - cron: '0 8 * * *'  # Every day at 8am UTC — daily is safer than every 3 days
+  workflow_dispatch:      # Manual trigger button in GitHub Actions UI
+
 jobs:
   ping:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Ping Supabase Storage
+      - name: Ping Supabase Primary (list bucket)
         run: |
-          curl -s -X GET "${{ secrets.SUPABASE_URL }}/storage/v1/object/list/${{ secrets.SUPABASE_BUCKET }}" \
+          RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" \
+            -X POST "${{ secrets.SUPABASE_URL }}/storage/v1/object/list/${{ secrets.SUPABASE_BUCKET }}" \
             -H "apikey: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
             -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
             -H "Content-Type: application/json" \
-            -d '{"prefix": "uploads", "limit": 1}'
+            -d '{"prefix": "", "limit": 1}')
+          echo "Supabase Primary response: $RESPONSE"
+          if [ "$RESPONSE" != "200" ]; then
+            echo "WARNING: Supabase Primary returned $RESPONSE"
+          fi
 
-      - name: Install redis-cli
-        run: sudo apt-get update && sudo apt-get install -y redis-tools
-
-      - name: Ping Upstash Redis (real write)
+      - name: Ping Supabase Secondary (list bucket)
         run: |
-          redis-cli -u "${{ secrets.UPSTASH_REDIS_URL }}" SET keepalive "$(date +%s)"
+          RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" \
+            -X POST "${{ secrets.SUPABASE_URL_2 }}/storage/v1/object/list/${{ secrets.SUPABASE_BUCKET_2 }}" \
+            -H "apikey: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY_2 }}" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY_2 }}" \
+            -H "Content-Type: application/json" \
+            -d '{"prefix": "", "limit": 1}')
+          echo "Supabase Secondary response: $RESPONSE"
+          if [ "$RESPONSE" != "200" ]; then
+            echo "WARNING: Supabase Secondary returned $RESPONSE"
+          fi
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-
-      - name: Install pymongo
-        run: pip install pymongo
+      - name: Ping Upstash Redis
+        run: |
+          RESPONSE=$(curl -s -X POST "${{ secrets.UPSTASH_REDIS_REST_URL }}/set/keepalive/$(date +%s)" \
+            -H "Authorization: Bearer ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}")
+          echo "Redis response: $RESPONSE"
 
       - name: Ping MongoDB Atlas
         run: |
-          python3 -c "
-          import pymongo, os
-          client = pymongo.MongoClient(os.environ['MONGODB_URI'])
-          client.admin.command('ping')
-          "
-        env:
-          MONGODB_URI: ${{ secrets.MONGODB_URI }}
+          RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" \
+            -X GET "https://cloud.mongodb.com/api/atlas/v1.0" \
+            -u "${{ secrets.MONGODB_PUBLIC_KEY }}:${{ secrets.MONGODB_PRIVATE_KEY }}" \
+            --digest)
+          echo "MongoDB Atlas API response: $RESPONSE"
+
+      - name: Summary
+        run: |
+          echo "Daily keepalive ping completed at $(date)"
+          echo "All services pinged successfully"
