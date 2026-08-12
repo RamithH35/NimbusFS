@@ -1,47 +1,57 @@
 name: Keep Services Alive
-
 on:
   schedule:
     - cron: '0 8 * * *'
   workflow_dispatch:
-
 jobs:
   ping:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Ping Supabase Secondary (healthy instance)
+      - name: Ping Supabase Secondary
         run: |
-          curl -sf --max-time 15 \
-            "${{ secrets.SUPABASE_URL_2 }}/storage/v1/object/list/${{ secrets.SUPABASE_BUCKET_2 }}" \
+          curl -s -X POST "${{ secrets.SUPABASE_URL_2 }}/storage/v1/object/list/${{ secrets.SUPABASE_BUCKET_2 }}" \
             -H "apikey: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY_2 }}" \
             -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY_2 }}" \
             -H "Content-Type: application/json" \
-            --data '{"prefix":"","limit":1}'
-          echo "Supabase Secondary ping OK"
+            -d '{"prefix": "", "limit": 1}'
+          echo "Supabase Secondary pinged"
 
-      - name: Ping Upstash Redis
-        run: |
-          RESPONSE=$(curl -s -X POST "${{ secrets.UPSTASH_REDIS_REST_URL }}/set/keepalive/$(date +%s)" \
-            -H "Authorization: Bearer ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}")
-          echo "Redis response: $RESPONSE"
-
-      - name: Ping MongoDB Atlas
-        run: |
-          curl -sf --max-time 15 \
-            "${{ secrets.MONGODB_URI }}" \
-            --output /dev/null
-          echo "MongoDB Atlas ping OK"
-
-      - name: Ping Supabase Primary (best-effort while support ticket open)
+      - name: Ping Supabase Primary (best-effort)
         continue-on-error: true
         run: |
-          curl -sf --max-time 10 \
-            "${{ secrets.SUPABASE_URL }}/storage/v1/object/list/${{ secrets.SUPABASE_BUCKET }}" \
+          curl -s -X POST "${{ secrets.SUPABASE_URL }}/storage/v1/object/list/${{ secrets.SUPABASE_BUCKET }}" \
             -H "apikey: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
             -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
             -H "Content-Type: application/json" \
-            --data '{"prefix":"","limit":1}' || echo "Supabase Primary unreachable (support ticket open — non-blocking)"
+            -d '{"prefix": "", "limit": 1}'
+          echo "Supabase Primary pinged (best-effort)"
+
+      - name: Install redis-cli
+        run: sudo apt-get update && sudo apt-get install -y redis-tools
+
+      - name: Ping Upstash Redis
+        run: |
+          redis-cli -u "${{ secrets.UPSTASH_REDIS_URL }}" SET keepalive "$(date +%s)"
+          echo "Redis pinged"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install pymongo
+        run: pip install pymongo
+
+      - name: Ping MongoDB Atlas
+        run: |
+          python3 -c "
+          import pymongo, os
+          client = pymongo.MongoClient(os.environ['MONGODB_URI'])
+          client.admin.command('ping')
+          print('MongoDB Atlas pinged')
+          "
+        env:
+          MONGODB_URI: ${{ secrets.MONGODB_URI }}
 
       - name: Summary
         run: echo "All services pinged at $(date)"
