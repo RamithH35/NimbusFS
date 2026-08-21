@@ -1,196 +1,101 @@
 # NimbusFS
+### Resilient Distributed File Storage System
 
-Distributed multi-cloud file storage backend with automatic failover, server-side encryption, and access-controlled link sharing.
-
----
-
-## What is NimbusFS?
-
-NimbusFS is a multi-cloud file storage manager designed to address the risks of single-provider dependency (e.g., service outages, latency spikes, or credential expiration) and the security vulnerabilities of storing plaintext assets on third-party cloud infrastructure.
-
-By decoupling the storage interface from specific cloud providers, NimbusFS implements an abstraction layer that handles transparent, server-side symmetric encryption (`aes-256-gcm`) and dynamic health checks. It manages cascading failovers across multiple storage services, falling back to background message queues when providers are unreachable.
+NimbusFS is a multi-provider distributed file storage system designed for high availability, fault tolerance, and zero-knowledge privacy. It abstracts storage providers behind a common interface, transparently encrypts files client-side (prior to upload), and automatically fails over across independent cloud infrastructures to guarantee continuous availability.
 
 ---
 
-## Key Features & Implementation Status
+## Conceptual Architecture
 
-| Feature | Description | Status |
-| :--- | :--- | :--- |
-| **Multi-Cloud Storage Abstraction** | Unified interface for file operations across Cloudinary, Supabase, and local disk. | **IMPLEMENTED** |
-| **Server-Side Encryption** | Automatic encryption of all file buffers using AES-256-GCM prior to cloud upload. | **IMPLEMENTED** |
-| **User-Scoped Deduplication** | SHA-256 content hashing to identify duplicate files and optimize storage consumption. | **IMPLEMENTED** |
-| **Access-Controlled Sharing** | Expiry limits, download limits, and password protection (`bcrypt`) on public share links. | **IMPLEMENTED** |
-| **Failover Storage Engine** | Pre-upload health checks and inline fallbacks when the primary provider goes down. | **IMPLEMENTED** |
-| **Background Upload Worker** | BullMQ and Redis job queuing for asynchronous retries of failed uploads. | **IMPLEMENTED** |
-| **Active Token Invalidation** | Version-based JWT invalidation on user logout. | **IMPLEMENTED** |
-| **Chunked File Uploads** | Multi-part upload initialization, chunk storage, and reassembly. | **IMPLEMENTED** |
-| **Self-Service Password Reset** | Forgotten password reset request form. | **DISABLED** (Form disabled in UI; requires mail server infrastructure) |
-| **Automated Test Suite** | In-code unit/integration tests running via `npm test`. | **NOT FOUND** (Audit log exists, but test scripts/code are absent) |
-
----
-
-## System Architecture
-
-NimbusFS utilizes a client-server architecture backed by a document database, in-memory caching, and asynchronous workers.
-
-```text
-               +----------------------------------------+
-               |          React / Vite Client           |
-               +----------------------------------------+
-                                    |
-                                    | HTTPS / JWT
-                                    v
-               +----------------------------------------+
-               |        Express.js API Gateway          |
-               +----------------------------------------+
-                 /                  |                 \
-  Zod Validation/    Mongoose Models|                  \ BullMQ Jobs
-               v                    v                   v
-        +------------+        +------------+      +------------+
-        | Middleware |        |  MongoDB   |      | Redis Cache|
-        +------------+        +------------+      +------------+
-                                    |                   |
-                                    |                   v
-                                    |             +------------+
-                                    |             | Bull Worker|
-                                    |             +------------+
-                                    |                   |
-                                    +---------+---------+
-                                              |
-                                              v
-                              +-------------------------------+
-                              |    Storage Abstraction Layer  |
-                              +-------------------------------+
-                               /              |              \
-                              v               v               v
-                      +--------------+ +--------------+ +------------+
-                      | Cloudinary   | | Supabase S3  | | Local Disk |
-                      |  (Primary)   | | (Secondary)  | | (Fallback) |
-                      +--------------+ +--------------+ +------------+
+```
+                    Client (React / Vite)
+                             │
+                             ▼ HTTPS (JWT / Cookies)
+                     Express API Gateway
+                             │
+                             ▼
+                 Storage Manager Abstraction
+                             │
+            ┌────────────────┼────────────────┬────────────────┐
+            │                │                │                │
+            ▼                ▼                ▼                ▼
+       Cloudinary     Supabase Primary   Supabase Secondary  Local Disk
+    (Primary Storage)  (First Fallback)  (Second Fallback)   (Last Resort)
+                             │                │                │
+                             └────────┬───────┘                │
+                                      │                        ▼
+                                      │                 BullMQ Queue (Redis)
+                                      │                        │
+                                      ▼                        ▼
+                                MongoDB Metadata        Background Retry
 ```
 
-### Module Descriptions
-- **Frontend Client**: Built with React (Vite) and Tailwind CSS. Implements session management via React Context, a drag-and-drop file interface, and dashboard dashboards for system admins to monitor storage health.
-- **API Gateway (Express)**: Manages authentication, endpoint routing, Zod validation pipelines, and Helmet-secured CORS configurations.
-- **Storage Abstraction Layer**: Exposes a unified `StorageProvider` interface. Encrypts plaintext payloads, performs pre-upload health checks, and routes files to healthy providers.
-- **Job Engine (BullMQ + Redis)**: Coordinates background retries. When all online cloud providers fail during an upload, the server saves the metadata to MongoDB, base64-encodes the encrypted payload, and passes it to Redis to be handled asynchronously.
+### Infrastructure Dependencies
+- **MongoDB**: Stores user information, file metadata (including AES encryption initialization vectors and authorization tags), and system failure logs.
+- **Redis / BullMQ**: Drives background jobs, retry queues, and asynchronous workers. If all remote storage providers are down, the encrypted file buffer is queued in Redis for background retry workers.
 
 ---
 
-## Core Data Flows
+## Failover & Storage Strategy
 
-### 1. File Upload & Encryption Flow
-```text
-Client            Express API         Deduplication Check      AES-256-GCM           Storage Manager
-  |                    |                       |                    |                       |
-  |--- POST /upload -->|                       |                    |                       |
-  |                    |--- Sniff MIME & Hash -|                    |                       |
-  |                    |                       |                    |                       |
-  |                    |<-- Duplicate Found ---|                    |                       |
-  |                    |    (Return 200 OK)    |                    |                       |
-  |                    |                                            |                       |
-  |                    |------------------- Encrypt Buffer -------->|                       |
-  |                    |                                            |<-- Return IV/Tag -----|
-  |                    |                                                                    |
-  |                    |-------------------------------- Upload (Encrypted Buffer) -------->|
-  |                    |                                                                    |-- Try Cloudinary
-  |                    |                                                                    |-- Fallback Supabase
-  |                    |                                                                    |-- Queue BullMQ
-```
+NimbusFS isolates cloud provider API details behind a unified `StorageProvider` base class. The failover loop checks the status of registered providers in a priority-ordered sequence:
 
-### 2. Secure File Download & Decryption Flow
-1. Client requests `GET /api/files/:id/download` (or `GET /api/share/:shareId`).
-2. Server queries MongoDB for the file metadata.
-3. Access authorization checks are performed (validating ownership, expiration, downloads, and link password).
-4. If allowed, server streams the encrypted binary payload from the mapped provider.
-5. Server buffers the chunks and decrypts them using the file's saved `iv` and `authTag`.
-6. Server sets content headers (`Content-Disposition`) and sends the decrypted plaintext buffer to the client.
-
----
-
-## Storage & Fallover Strategy
-
-NimbusFS isolates cloud provider logic behind a `StorageProvider` base class. Providers are registered in a priority-ordered sequence:
 1. **Cloudinary** (Primary Cloud Storage)
-2. **Supabase Storage** (Secondary Cloud Storage)
-3. **Local Disk** (Last-resort disk-based storage inside the `/uploads` directory)
+2. **Supabase Primary** (First Fallback Cloud Storage)
+3. **Supabase Secondary** (Second Fallback Cloud Storage)
+4. **Local Disk & Queue Fallback** (Last-resort fallback)
 
-### Pre-Upload Health check & Failover Loop
-Prior to committing a write, [storageManager.js](file:///c:/Users/ramit/Resume_projects/NimbusFS/src/storage/storageManager.js) initiates a ping sequence:
-- If a provider's health check fails or the upload raises an exception, the manager logs the exception to MongoDB ([FailureLog.js](file:///c:/Users/ramit/Resume_projects/NimbusFS/src/storage/FailureLog.js)) and drops down to the next provider.
-- If all cloud options fail, the encrypted buffer is base64-encoded and queued in BullMQ. A background worker retries the upload periodically, updating the file's provider metadata once successful.
-
----
-
-## Authentication & Security
-
-- **JSON Web Tokens (JWT)**: Features a dual-token design. Access tokens have a 15-minute lifetime, while HTTP-Only, Secure, SameSite-Strict cookies store a 7-day refresh token.
-- **Active Invalidation**: Stores a `tokenVersion` counter on the [User](file:///c:/Users/ramit/Resume_projects/NimbusFS/src/auth/User.js) schema. Logging out increments this counter, rendering all active tokens invalid immediately.
-- **Data Confidentiality**: File buffers are encrypted locally using AES-256-GCM. Cloud providers only receive high-entropy binary blobs. Symmetric keys are kept in server environment files.
-- **File Sniffing Protection**: Integrates the `file-type` magic number sniffer on the server to prevent malicious file extension spoofing (e.g., executing a hidden `.exe` uploaded as a `.txt` file).
-- **Access Limits**: The [fileAccess.js](file:///c:/Users/ramit/Resume_projects/NimbusFS/src/utils/fileAccess.js) helper verifies bcrypt-hashed link passwords, expiration limits, and maximum download caps.
+### How Failover and Health Checks Work
+- **Pre-Upload Health Checks**: Prior to uploading a file, the system runs a fast, lightweight ping (`healthCheck()`) to verify if the provider is online.
+- **Cascading Fallback**: If a provider is marked unhealthy or throws an exception during upload, the system logs the failure details to MongoDB ([`FailureLog`](file:///c:/Users/ramit/Resume_projects/NimbusFS/src/storage/FailureLog.js)) and immediately drops to the next provider.
+- **Strict Latency Control**: Network timeouts are wrapper-configured (e.g., 2000ms for Supabase Secondary) to prevent the user request from hanging if a provider is experiencing high latency.
+- **Queue Fallback**: If all remote storage backends are unreachable, the server saves the encrypted file locally and enqueues an asynchronous upload job in BullMQ. A background worker periodically retries the upload to the cloud and updates the record once resolved.
 
 ---
 
-## Database Design
+## Interview & Design Q&A
 
-NimbusFS uses three Mongoose-mapped collections in MongoDB:
+### Why two Supabase projects?
+Using two independent Supabase instances (Supabase Primary and Supabase Secondary) provides separate, isolated failure domains. Even if a provider-wide regional outage or API deprecation impacts one Supabase project, the second project remains as a resilient backup.
 
-```mermaid
-erDiagram
-    USER ||--o{ FILE : owns
-    FILE ||--o{ FAILURE_LOG : references
-    USER ||--o{ FAILURE_LOG : triggers
+**Tradeoffs Considered:**
+- **Operational Complexity**: Managing two sets of API keys, URLs, and storage buckets increases the configuration surface area.
+- **Data Duplication**: Maintaining multiple environments adds maintenance overhead.
+- **Resilience**: The extra configuration ensures that the service is protected from single-provider downtime, matching enterprise-grade disaster recovery practices.
 
-    USER {
-        ObjectId id PK
-        String email UK
-        String passwordHash
-        String name
-        Number tokenVersion
-        Date createdAt
-    }
+---
 
-    FILE {
-        ObjectId id PK
-        ObjectId ownerId FK
-        String originalName
-        String storedName
-        String provider
-        String mimeType
-        Number size
-        String visibility
-        String shareId UK
-        String sharePasswordHash
-        Date expiresAt
-        Number maxDownloads
-        Number downloadCount
-        String iv
-        String authTag
-        String hash
-        Boolean isChunked
-        Number totalChunks
-        String uploadId UK
-        String status
-        Date createdAt
-    }
+## Technology Stack
 
-    FAILURE_LOG {
-        ObjectId id PK
-        String provider
-        String operation
-        String errorMessage
-        ObjectId fileId FK
-        ObjectId ownerId FK
-        String resolvedProvider
-        Date timestamp
-    }
-```
+### Backend
+- **Node.js** & **Express** (using ES Modules)
+- **Zod**: Input schema validation
+- **Multer**: Multi-part form-data parsing
 
-### Critical Indexes
-- `{ shareId: 1 }` (Sparse): For efficient public share link lookups.
-- `{ uploadId: 1 }` (Sparse): Speeds up tracking of multi-part chunked upload sessions.
-- `{ hash: 1, ownerId: 1 }` (Compound): Allows rapid, user-scoped content checks for deduplication.
+### Storage
+- **Cloudinary**: Primary cloud storage
+- **Supabase Storage (×2)**: Primary and Secondary independent fallback cloud domains
+- **Local Filesystem**: Emergency fallback directory (`/uploads`)
+
+### Database & Caching
+- **MongoDB** (via **Mongoose**): System metadata, users, files, and failure logs
+- **Redis** & **BullMQ**: Asynchronous background retry system
+
+### Security
+- **Symmetric Encryption**: `AES-256-GCM` encryption of file buffers server-side prior to cloud transmission
+- **JWT Authentication**: Short-lived access tokens with HTTP-Only, SameSite-Strict refresh cookies
+- **Active Token Invalidation**: Increment-based `tokenVersion` stored on the User schema to instantly invalidate old sessions on logout
+- **File Sniffing Protection**: Magic-number verification using the `file-type` library to block extension spoofing
+- **Bcrypt**: Multi-round password hashing for shares and accounts
+- **Express Rate Limiters**: Brute-force protection on authentication and public file-sharing endpoints
+
+### Frontend
+- **React 19** & **Vite**
+- **Tailwind CSS v4**
+- **React Router Dom v7**
+
+### DevOps
+- **GitHub Actions**: Scheduled infrastructure health/activity workflow (pings Supabase, Upstash Redis, and MongoDB Atlas databases to maintain activity and audit health)
 
 ---
 
@@ -219,82 +124,54 @@ erDiagram
 
 ---
 
-## Project Structure
-
-```text
-NimbusFS/
-├── client/                     # Frontend Workspace (Vite + React)
-│   ├── src/
-│   │   ├── api/                # Custom API client handler
-│   │   ├── components/
-│   │   │   ├── files/          # Upload and Share modal overlays
-│   │   │   ├── layout/         # App navbar/sidebar shell
-│   │   │   └── ui/             # Reusable cards, buttons, inputs
-│   │   ├── context/            # Toast and Auth global states
-│   │   └── pages/              # Page components (Dashboard, Shared, Admin, etc.)
-├── src/                        # Backend Application Workspace (Node/Express)
-│   ├── auth/                   # Users schema, controller, and routes
-│   ├── config/                 # Env loading and strict key validation
-│   ├── controllers/            # Controller layers (Files, Shares, Admin)
-│   ├── jobs/                   # Redis connection, BullMQ queue, and workers
-│   ├── middleware/             # Rate limiters, JWT checking, and Zod validator
-│   ├── providers/              # Multi-cloud storage API clients
-│   ├── routes/                 # Routing endpoints
-│   ├── storage/                # StorageManager facade and FailureLog schema
-│   ├── utils/                  # Encryptor, Hash generator, and Retry helpers
-│   └── server.js               # Main server entrypoint
-├── eslint.config.js            # Linter rules configuration
-├── package.json                # Dependencies and dev start scripts
-└── README.md                   # Project documentation
-```
-
----
-
 ## Setup & Local Development
 
 ### Prerequisites
 - Node.js (v18+)
-- MongoDB running locally or via MongoDB Atlas
-- Redis instance (required for BullMQ upload worker)
+- MongoDB (Local or Atlas)
+- Redis (required for BullMQ queue)
 
 ### Environment Setup
-Create a `.env` file in the backend root based on `.env.example`:
+Create a `.env` file in the root based on `.env.example`:
 
 ```ini
 PORT=5000
 NODE_ENV=development
 ALLOWED_ORIGIN=http://localhost:5173
 
-MONGO_URI=
+MONGO_URI=your_mongodb_connection_string
 
-JWT_SECRET=
-REFRESH_TOKEN_SECRET=
+JWT_SECRET=your_jwt_secret
+REFRESH_TOKEN_SECRET=your_refresh_jwt_secret
 
 MAX_FILE_SIZE_MB=10
 
-CLOUDINARY_CLOUD_NAME=
-CLOUDINARY_API_KEY=
-CLOUDINARY_API_SECRET=
+CLOUDINARY_CLOUD_NAME=your_cloudinary_cloud_name
+CLOUDINARY_API_KEY=your_cloudinary_api_key
+CLOUDINARY_API_SECRET=your_cloudinary_api_secret
 
-SUPABASE_URL=
-SUPABASE_SERVICE_ROLE_KEY=
+SUPABASE_URL=your_supabase_primary_url
+SUPABASE_SERVICE_ROLE_KEY=your_supabase_primary_key
 SUPABASE_BUCKET=nimbusfs-files
+
+SUPABASE_URL_2=your_supabase_secondary_url
+SUPABASE_SERVICE_ROLE_KEY_2=your_supabase_secondary_key
+SUPABASE_BUCKET_2=nimbusfs-files
 
 REDIS_URL=redis://127.0.0.1:6379
 
 FRONTEND_URL=http://localhost:5173
 
-# 32-byte AES-256-GCM key represented as 64 hexadecimal characters
-ENCRYPTION_KEY=
+ENCRYPTION_KEY=64_character_hexadecimal_encryption_key
 ```
 
 ### Installation
-1. Install backend dependencies and run the server:
+1. Install dependencies & run backend:
    ```bash
    npm install
    npm run dev
    ```
-2. Install frontend dependencies and run the client:
+2. Install client dependencies & run frontend:
    ```bash
    cd client
    npm install
@@ -303,28 +180,6 @@ ENCRYPTION_KEY=
 
 ---
 
-## Testing & Verification
-
-While there is no automated test framework configured in `package.json` for manual execution, a verification run is documented in [audit_results.json](file:///c:/Users/ramit/Resume_projects/NimbusFS/audit_results.json). This audit evaluates security configurations, failover routing, rate limiting, and permission rules.
-
-You can verify the API contract manually using postman/curl queries based on the paths in [routes](file:///c:/Users/ramit/Resume_projects/NimbusFS/src/routes).
-
----
-
-## Current Limitations & Known Issues
-
-1. **Stateful Chunks**:
-   Chunks are stored in-memory in a JavaScript `Map` on the server instance. Scaling the backend horizontally behind a standard load balancer without sticky sessions will result in fragmented uploads.
-2. **No Database Transaction Safeguards**:
-   If a file upload succeeds on a cloud provider but the server crashes before saving the metadata to MongoDB, the cloud asset becomes orphaned. There is no cleanup process or database transaction to rollback orphaned uploads.
-
----
-
 ## AI-Assisted Development
 
-This repository contains reusable agent instructions and custom system instructions under the `.agents`, `.claude`, `.kilocode`, and `.zencoder` directories. These directories are used to guide AI development agents when modifying the codebase, maintaining styling consistencies, and running validation audits. They are not part of the runtime application code.
-
----
-
-## License
-This project is licensed under the **ISC License** (refer to `package.json`).
+This repository contains development guidelines in the [`.agents/`](file:///c:/Users/ramit/Resume_projects/NimbusFS/.agents) folder. These instructions guide AI pair programmers on project rules, styling guidelines, and engineering playbooks when assisting with local development.
