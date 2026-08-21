@@ -1,0 +1,200 @@
+name: Keep Services Alive
+
+on:
+  schedule:
+    # 08:00 UTC = 13:30 IST
+    - cron: '0 8 * * *'
+  workflow_dispatch:
+
+# Required for the GitHub keepalive commit
+permissions:
+  contents: write
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+
+    steps:
+
+      # ============================================================
+      # SUPABASE #1 — NimbusFS
+      # ============================================================
+
+      - name: Database activity — NimbusFS
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          echo "Generating database activity on NimbusFS..."
+
+          for i in 1 2 3; do
+            curl -fsS \
+              --retry 3 \
+              --retry-all-errors \
+              --max-time 20 \
+              "${SUPABASE_URL}/rest/v1/keepalive?select=id&limit=1" \
+              -H "apikey: ${SUPABASE_KEY}" \
+              -H "Authorization: Bearer ${SUPABASE_KEY}" \
+              -H "Accept: application/json" \
+              -o /dev/null
+
+            echo "NimbusFS database request $i/3 successful"
+          done
+
+      - name: Storage health check — NimbusFS
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SUPABASE_BUCKET: ${{ secrets.SUPABASE_BUCKET }}
+        run: |
+          echo "Checking NimbusFS Storage..."
+
+          curl -fsS \
+            --retry 3 \
+            --retry-all-errors \
+            --max-time 20 \
+            -X POST \
+            "${SUPABASE_URL}/storage/v1/object/list/${SUPABASE_BUCKET}" \
+            -H "apikey: ${SUPABASE_KEY}" \
+            -H "Authorization: Bearer ${SUPABASE_KEY}" \
+            -H "Content-Type: application/json" \
+            -d '{"prefix":"uploads","limit":1,"offset":0}' \
+            -o /dev/null
+
+          echo "NimbusFS Storage check successful"
+
+
+      # ============================================================
+      # SUPABASE #2 — NimbusFS2
+      # ============================================================
+
+      - name: Database activity — NimbusFS2
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL_2 }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY_2 }}
+        run: |
+          echo "Generating database activity on NimbusFS2..."
+
+          for i in 1 2 3; do
+            curl -fsS \
+              --retry 3 \
+              --retry-all-errors \
+              --max-time 20 \
+              "${SUPABASE_URL}/rest/v1/keepalive?select=id&limit=1" \
+              -H "apikey: ${SUPABASE_KEY}" \
+              -H "Authorization: Bearer ${SUPABASE_KEY}" \
+              -H "Accept: application/json" \
+              -o /dev/null
+
+            echo "NimbusFS2 database request $i/3 successful"
+          done
+
+      - name: Storage health check — NimbusFS2
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL_2 }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY_2 }}
+          SUPABASE_BUCKET: ${{ secrets.SUPABASE_BUCKET_2 }}
+        run: |
+          echo "Checking NimbusFS2 Storage..."
+
+          curl -fsS \
+            --retry 3 \
+            --retry-all-errors \
+            --max-time 20 \
+            -X POST \
+            "${SUPABASE_URL}/storage/v1/object/list/${SUPABASE_BUCKET}" \
+            -H "apikey: ${SUPABASE_KEY}" \
+            -H "Authorization: Bearer ${SUPABASE_KEY}" \
+            -H "Content-Type: application/json" \
+            -d '{"prefix":"uploads","limit":1,"offset":0}' \
+            -o /dev/null
+
+          echo "NimbusFS2 Storage check successful"
+
+
+      # ============================================================
+      # UPSTASH REDIS
+      # ============================================================
+
+      - name: Install redis-cli
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y redis-tools
+
+      - name: Ping Upstash Redis
+        env:
+          UPSTASH_REDIS_URL: ${{ secrets.UPSTASH_REDIS_URL }}
+        run: |
+          redis-cli -u "${UPSTASH_REDIS_URL}" \
+            SET keepalive "$(date +%s)"
+
+          echo "Upstash Redis keepalive successful"
+
+
+      # ============================================================
+      # MONGODB ATLAS
+      # ============================================================
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install pymongo
+        run: |
+          pip install --quiet pymongo
+
+      - name: Ping MongoDB Atlas
+        env:
+          MONGODB_URI: ${{ secrets.MONGODB_URI }}
+        run: |
+          python3 -c "
+          import pymongo
+          import os
+
+          client = pymongo.MongoClient(
+              os.environ['MONGODB_URI'],
+              serverSelectionTimeoutMS=10000
+          )
+
+          client.admin.command('ping')
+
+          print('MongoDB Atlas keepalive successful')
+
+          client.close()
+          "
+
+
+      # ============================================================
+      # GITHUB REPOSITORY
+      # ============================================================
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Keep repository active
+        run: |
+          git config user.email "keepalive@nimbusfs.com"
+          git config user.name "NimbusFS Keepalive"
+
+          echo "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" > .keepalive
+
+          git add .keepalive
+
+          git commit \
+            -m "chore: keepalive $(date -u '+%Y-%m-%d')" \
+            || echo "Nothing to commit"
+
+          git push
+
+
+      # ============================================================
+      # SUMMARY
+      # ============================================================
+
+      - name: Summary
+        run: |
+          echo "========================================="
+          echo "NimbusFS Keepalive completed successfully"
+          echo "UTC: $(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+          echo "========================================="
