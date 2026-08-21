@@ -1,7 +1,19 @@
 # NimbusFS
+![Keepalive](https://github.com/RamithH35/NimbusFS/actions/workflows/keepalive.yml/badge.svg)
+
 ### Resilient Distributed File Storage System
 
 NimbusFS is a multi-provider distributed file storage system designed for high availability, fault tolerance, and zero-knowledge privacy. It abstracts storage providers behind a common interface, transparently encrypts files client-side (prior to upload), and automatically fails over across independent cloud infrastructures to guarantee continuous availability.
+
+---
+
+## Live Demo
+Coming soon — deployment in progress. [Backend](#) | [Frontend](#)
+
+---
+
+## Screenshots
+_Screenshots coming soon._
 
 ---
 
@@ -62,6 +74,16 @@ Using two independent Supabase instances (Supabase Primary and Supabase Secondar
 - **Operational Complexity**: Managing two sets of API keys, URLs, and storage buckets increases the configuration surface area.
 - **Data Duplication**: Maintaining multiple environments adds maintenance overhead.
 - **Resilience**: The extra configuration ensures that the service is protected from single-provider downtime, matching enterprise-grade disaster recovery practices.
+
+### Why encrypt files before uploading instead of relying on the cloud provider's encryption?
+Relying on cloud provider-side encryption means the provider has control over both the plaintext assets and the encryption keys. This creates a single point of failure and privacy concerns (e.g., data breaches, insider threats, or provider key exposure). 
+
+By encrypting the file buffer locally on our server using `AES-256-GCM` before transmission, the cloud providers only receive high-entropy, encrypted binary blobs. The decryption key, initialization vectors (IV), and authentication tags are kept in our metadata database, ensuring zero-knowledge privacy relative to the cloud storage providers.
+
+### Why use BullMQ for retries instead of just retrying the upload inline?
+Inline retries block the Express API request thread, keeping client connections open and leading to potential HTTP gateway timeouts and a poor user experience—especially for larger files or under poor network conditions. 
+
+If all remote storage providers are down, routing the request to a background queue system (BullMQ + Redis) allows us to save the file locally, immediately respond to the user with a `queued` status, and run retry worker loops asynchronously in the background. This decouples user experience from temporary provider downtime.
 
 ---
 
@@ -183,3 +205,13 @@ ENCRYPTION_KEY=64_character_hexadecimal_encryption_key
 ## AI-Assisted Development
 
 This repository contains development guidelines in the [`.agents/`](file:///c:/Users/ramit/Resume_projects/NimbusFS/.agents) folder. These instructions guide AI pair programmers on project rules, styling guidelines, and engineering playbooks when assisting with local development.
+
+---
+
+## Roadmap
+
+Planned features and future expansions for NimbusFS:
+* **Google OAuth Integration**: Add third-party identity provider support for user authentication.
+* **Production Deployment**: Host and configure live environments using Render (Backend) and Vercel (Frontend).
+* **Additional Storage Provider Support**: Extend storage provider interfaces to include AWS S3, Google Cloud Storage, and Azure Blob Storage.
+* **CI Test Automation**: Configure GitHub Actions to run unit/integration test suites on every pull request.
