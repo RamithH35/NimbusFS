@@ -13,6 +13,7 @@ permissions:
 jobs:
   ping:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     steps:
 
@@ -113,26 +114,7 @@ jobs:
 
 
       # ============================================================
-      # UPSTASH REDIS
-      # ============================================================
-
-      - name: Install redis-cli
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y redis-tools
-
-      - name: Ping Upstash Redis
-        env:
-          UPSTASH_REDIS_URL: ${{ secrets.UPSTASH_REDIS_URL }}
-        run: |
-          redis-cli -u "${UPSTASH_REDIS_URL}" \
-            SET keepalive "$(date +%s)"
-
-          echo "Upstash Redis keepalive successful"
-
-
-      # ============================================================
-      # MONGODB ATLAS
+      # UPSTASH REDIS + MONGODB ATLAS (Python)
       # ============================================================
 
       - name: Set up Python
@@ -140,9 +122,26 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Install pymongo
+      - name: Install dependencies
         run: |
-          pip install --quiet pymongo
+          pip install --quiet pymongo redis
+
+      - name: Ping Upstash Redis
+        env:
+          UPSTASH_REDIS_URL: ${{ secrets.UPSTASH_REDIS_URL }}
+        run: |
+          python3 -c "
+          import os, time, redis
+
+          r = redis.from_url(
+              os.environ['UPSTASH_REDIS_URL'],
+              socket_connect_timeout=10,
+              socket_timeout=10
+          )
+          r.set('keepalive', int(time.time()))
+
+          print('Upstash Redis keepalive successful')
+          "
 
       - name: Ping MongoDB Atlas
         env:
